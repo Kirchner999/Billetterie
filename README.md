@@ -12,19 +12,3 @@ Les principales fonctionnalités prévues :
 - Gestion des **paiements** et **réservations**
 
 ---
-
-## Structure du projet
-
-Billetterie/
-
-├── src/ # Code source (backend, scripts, etc.)
-
-├── docs/ # Documentation technique et UML
-
-├── sql/ # Scripts SQL de création et de peuplement de la base
-
-├── assets/ # Images, logos, etc.
-
-├── tests/ # Scénarios de test
-
-└── README.md # Présentation du projet
