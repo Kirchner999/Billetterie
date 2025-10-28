@@ -1,0 +1,60 @@
+# 🎯 Benchmark — Frameworks d’interfaces Java
+
+## Objectif
+Choisir un framework Java adapté à la création de l’interface graphique du projet **Gestion de Billetterie**.
+
+---
+
+## ⚙️ Frameworks comparés
+
+### 🟦 JavaFX
+**Type :** Desktop  
+**Langage :** Java / FXML  
+**Points forts :**
+- Intégré à Java (facile à utiliser)
+- Rendu moderne, support CSS & Scene Builder
+- Léger, rapide pour du local
+
+**Limites :**
+- Pas orienté web
+- Nécessite installation sur chaque poste
+
+---
+
+### 🟩 Vaadin Flow
+**Type :** Web full Java  
+**Langage :** Java uniquement  
+**Points forts :**
+- Interface web responsive, sans JS
+- Compatible Spring Boot
+- Déploiement unique sur serveur
+
+**Limites :**
+- Installation plus lourde
+- Moins performant pour usage local
+
+---
+
+## 📊 Matrice synthétique
+
+| Critère (poids)             | JavaFX | Vaadin |
+|-----------------------------|:------:|:------:|
+| Intégration Java (10)       |   10   |    8   |
+| Facilité d’installation (8) |   8    |    6   |
+| Courbe d’apprentissage (8)  |   7    |    7   |
+| Documentation (7)           |   8    |    9   |
+| MVC / architecture (6)      |   7    |    8   |
+| Rendu visuel (7)            |   9    |    8   |
+| Performances (6)            |   8    |    6   |
+| Compatibilité web (5)       |   4    |    9   |
+| **Total pondéré**           | **520**| **578**|
+
+---
+
+## ✅ Recommandation
+- **Choix principal : Vaadin Flow** → idéal pour une application web multi-utilisateurs.  
+- **Alternative : JavaFX** → adapté à une exécution locale rapide.  
+
+**Conclusion :** Vaadin Flow offre plus de flexibilité et de portée pour une billetterie accessible depuis navigateur.
+
+---
