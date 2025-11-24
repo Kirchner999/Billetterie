@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+
+<AnchorPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="fr.billetterie.controller.LoginController"
+            prefWidth="400" prefHeight="300">
+
+    <VBox spacing="15" alignment="CENTER" AnchorPane.topAnchor="20"
+          AnchorPane.bottomAnchor="20" AnchorPane.leftAnchor="20" AnchorPane.rightAnchor="20">
+
+        <Text text="Connexion" style="-fx-font-size: 26px; -fx-font-weight: bold;"/>
+
+        <TextField fx:id="emailField" promptText="Email" maxWidth="250"/>
+
+        <PasswordField fx:id="passwordField" promptText="Mot de passe" maxWidth="250"/>
+
+        <Button text="Se connecter" onAction="#handleLogin"
+                style="-fx-background-color: #1e90ff; -fx-text-fill: white;
+                -fx-padding: 8 20; -fx-background-radius: 6;"/>
+
+        <Label fx:id="errorLabel" textFill="red"/>
+
+    </VBox>
+
+</AnchorPane>

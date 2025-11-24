@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox alignment="CENTER" spacing="15" xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="fr.billetterie.controller.RegisterController"
+      prefWidth="400" prefHeight="350">
+
+    <Label text="Créer un compte" style="-fx-font-size: 24px; -fx-font-weight: bold;"/>
+
+    <TextField fx:id="nomField" promptText="Nom complet" prefWidth="250"/>
+    <TextField fx:id="emailField" promptText="Email" prefWidth="250"/>
+    <PasswordField fx:id="passwordField" promptText="Mot de passe" prefWidth="250"/>
+
+    <Button text="S'inscrire" prefWidth="200" onAction="#handleRegister"/>
+
+    <Hyperlink text="Déjà un compte ? Se connecter"
+               onAction="#goToLogin"/>
+
+</VBox>

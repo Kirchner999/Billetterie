@@ -12,6 +12,7 @@ CREATE TABLE Client (
     adresse VARCHAR(255),
     is_admin BOOLEAN DEFAULT FALSE,
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    add role ENUM('ADMIN', 'EDITEUR', 'CLIENT') 
 );
 
 CREATE TABLE Spectacle (

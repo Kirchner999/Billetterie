@@ -4,7 +4,20 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
+        {
+            "type": "java",
+            "name": "App",
+            "request": "launch",
+            "mainClass": "fr.billetterie/fr.billetterie.App",
+            "projectName": "billetterie-main"
+        },
+        {
+            "type": "java",
+            "name": "billetterie/App",
+            "request": "launch",
+            "mainClass": "fr.billetterie/App",
+            "projectName": "billetterie-main_f9693ea4"
+        },
         {
             "type": "java",
             "name": "App",
