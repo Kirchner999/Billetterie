@@ -18,6 +18,7 @@
             <Font size="32"/>
         </font>
     </Label>
+    <Button text="Changer thème" onAction="#switchTheme"/>
 
     <HBox spacing="20" alignment="CENTER">
         <Button text="Clients" fx:id="btnClients"

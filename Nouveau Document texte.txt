@@ -1,0 +1,7 @@
+git add .
+git commit -m "Mise à jour du projet"
+git push origin main
+
+
+
+mvn clean javafx:run

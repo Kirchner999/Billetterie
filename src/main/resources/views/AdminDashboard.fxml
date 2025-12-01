@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="fr.billetterie.controller.AdminDashboardController">
+
+    <!-- SIDEBAR -->
+    <VBox styleClass="sidebar" spacing="25" prefWidth="220" BorderPane.alignment="CENTER_LEFT">
+        <Label text="Admin Panel" styleClass="title"/>
+
+        <Button text="Gestion Spectacles"/>
+        <Button text="Gestion Représentations"/>
+        <Button text="Gestion Utilisateurs"/>
+        <Button text="Billets vendus"/>
+        <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
+        <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
+    </VBox>
+
+    <!-- CONTENT -->
+    <ScrollPane fitToWidth="true">
+        <FlowPane alignment="CENTER" hgap="25" vgap="25" padding="30">
+
+            <VBox styleClass="card" alignment="CENTER" spacing="10">
+                <Label text="Utilisateurs" styleClass="title"/>
+                <Label text="Section administration complète"/>
+            </VBox>
+
+            <VBox styleClass="card" alignment="CENTER" spacing="10">
+                <Label text="Spectacles" styleClass="title"/>
+                <Label text="Créer / modifier / supprimer"/>
+            </VBox>
+
+            <VBox styleClass="card" alignment="CENTER" spacing="10">
+                <Label text="Statistiques" styleClass="title"/>
+                <Label text="Graphiques & ventes"/>
+            </VBox>
+
+        </FlowPane>
+    </ScrollPane>
+
+</BorderPane>

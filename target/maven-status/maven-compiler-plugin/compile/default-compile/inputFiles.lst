@@ -1,4 +1,6 @@
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\App.java
+C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\controller\AdminDashboardController.java
+C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\controller\ClientDashboardController.java
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\controller\HomeController.java
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\controller\LoginController.java
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\controller\MainController.java
@@ -13,4 +15,5 @@ C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\model\Billet.java
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\model\Client.java
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\model\Representation.java
 C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\model\Spectacle.java
+C:\xampp\htdocs\billetterie-main\src\main\java\fr\billetterie\utils\ThemeManager.java
 C:\xampp\htdocs\billetterie-main\src\main\java\module-info.java

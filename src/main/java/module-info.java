@@ -3,6 +3,7 @@ module fr.billetterie {
     requires javafx.controls;
     requires javafx.fxml;
     requires java.sql;
+    requires java.prefs;
 
     // Ouvre aux FXML
     opens fr.billetterie.controller to javafx.fxml;

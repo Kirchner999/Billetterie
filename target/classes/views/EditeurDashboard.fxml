@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="fr.billetterie.controller.EditeurDashboardController">
+
+    <!-- SIDEBAR -->
+    <VBox styleClass="sidebar" spacing="25" prefWidth="220">
+        <Label text="Éditeur" styleClass="title"/>
+
+        <Button text="Gérer Spectacles"/>
+        <Button text="Gérer Représentations"/>
+        <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
+        <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
+    </VBox>
+
+    <!-- CONTENT -->
+    <ScrollPane fitToWidth="true">
+        <FlowPane alignment="CENTER"
+                  hgap="25"
+                  vgap="25"
+                  padding="30">
+
+            <VBox styleClass="card" alignment="CENTER" spacing="10">
+                <Label text="Spectacles" styleClass="title"/>
+                <Label text="Créer / modifier les spectacles"/>
+            </VBox>
+
+            <VBox styleClass="card" alignment="CENTER" spacing="10">
+                <Label text="Représentations" styleClass="title"/>
+                <Label text="Gestion horaire + prix"/>
+            </VBox>
+
+        </FlowPane>
+    </ScrollPane>
+
+</BorderPane>

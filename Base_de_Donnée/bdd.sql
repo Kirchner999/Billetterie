@@ -3,6 +3,7 @@ USE Gestion_Billetterie;
 
 CREATE TABLE Client (
     id INT AUTO_INCREMENT PRIMARY KEY,
+
     pseudo VARCHAR(100) NOT NULL,
     nom VARCHAR(100) NOT NULL,
     prenom VARCHAR(100) NOT NULL,
@@ -10,9 +11,12 @@ CREATE TABLE Client (
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     adresse VARCHAR(255),
+    role ENUM('ADMIN', 'EDITEUR', 'CLIENT') DEFAULT 'CLIENT',
     is_admin BOOLEAN DEFAULT FALSE,
     date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    add role ENUM('ADMIN', 'EDITEUR', 'CLIENT') 
+);
+
+
 );
 
 CREATE TABLE Spectacle (

@@ -1,12 +1,11 @@
 package fr.billetterie.controller;
 
+import fr.billetterie.App;
 import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.model.Client;
+import fr.billetterie.utils.ThemeManager;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import javafx.stage.Stage;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Scene;
 
 public class RegisterController {
 
@@ -14,45 +13,57 @@ public class RegisterController {
     @FXML private TextField emailField;
     @FXML private PasswordField passwordField;
 
+    private final ClientDAO clientDAO = new ClientDAO();
+
     @FXML
     public void handleRegister() {
-        String nom = nomField.getText();
-        String email = emailField.getText();
-        String password = passwordField.getText();
 
-        if (nom.isEmpty() || email.isEmpty() || password.isEmpty()) {
-            showError("Veuillez remplir tous les champs.");
+        String nom = nomField.getText().trim();
+        String email = emailField.getText().trim();
+        String mdp = passwordField.getText().trim();
+
+        if (nom.isEmpty() || email.isEmpty() || mdp.isEmpty()) {
+            showAlert("Veuillez remplir tous les champs");
             return;
         }
 
-        if (ClientDAO.emailExists(email)) {
-            showError("Cet email est déjà utilisé.");
+        if (clientDAO.emailExists(email)) {
+            showAlert("Cet email existe déjà !");
             return;
         }
 
-        Client c = new Client(0, nom, email, password);
-        ClientDAO.register(c);
+        Client c = new Client(
+                0,
+                "User",     // pseudo par défaut
+                nom,
+                "",
+                "",
+                email,
+                mdp,
+                "",
+                false,
+                "CLIENT"
+        );
 
-        showInfo("Compte créé avec succès !");
-        goToLogin();
+        if (clientDAO.register(c)) {
+            App.loadPage("Login.fxml");
+        } else {
+            showAlert("Erreur lors de l'inscription.");
+        }
     }
 
     @FXML
     public void goToLogin() {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/views/Login.fxml"));
-            Stage stage = (Stage) nomField.getScene().getWindow();
-            stage.setScene(new Scene(loader.load()));
-        } catch (Exception e) { e.printStackTrace(); }
+        App.loadPage("Login.fxml");
     }
 
-    private void showError(String msg) {
-        Alert a = new Alert(Alert.AlertType.ERROR, msg);
-        a.showAndWait();
+    @FXML
+    public void switchTheme() {
+        ThemeManager.toggleTheme();
     }
 
-    private void showInfo(String msg) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION, msg);
+    private void showAlert(String msg) {
+        Alert a = new Alert(Alert.AlertType.WARNING, msg);
         a.showAndWait();
     }
 }
