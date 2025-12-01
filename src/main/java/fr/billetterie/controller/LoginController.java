@@ -13,23 +13,28 @@ public class LoginController {
     @FXML private PasswordField passwordField;
     @FXML private Label errorLabel;
 
-    private final ClientDAO clientDAO = new ClientDAO();
-
     @FXML
     public void handleLogin() {
 
         String email = emailField.getText().trim();
         String mdp = passwordField.getText().trim();
 
-        Client user = clientDAO.login(email, mdp);
-
-        if (user == null) {
-            errorLabel.setText("Identifiants incorrects");
+        if (email.isEmpty() || mdp.isEmpty()) {
+            errorLabel.setText("Veuillez remplir tous les champs.");
             return;
         }
 
+        Client user = ClientDAO.authenticate(email, mdp);
+
+        if (user == null) {
+            errorLabel.setText("Identifiants incorrects !");
+            return;
+        }
+
+        // Sauvegarde de l'utilisateur connecté
         App.setCurrentUser(user);
 
+        // Redirection selon rôle
         switch (user.getRole()) {
             case "ADMIN" -> App.loadPage("AdminDashboard.fxml");
             case "EDITEUR" -> App.loadPage("EditeurDashboard.fxml");

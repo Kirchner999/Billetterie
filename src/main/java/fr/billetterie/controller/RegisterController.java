@@ -13,8 +13,6 @@ public class RegisterController {
     @FXML private TextField emailField;
     @FXML private PasswordField passwordField;
 
-    private final ClientDAO clientDAO = new ClientDAO();
-
     @FXML
     public void handleRegister() {
 
@@ -23,29 +21,30 @@ public class RegisterController {
         String mdp = passwordField.getText().trim();
 
         if (nom.isEmpty() || email.isEmpty() || mdp.isEmpty()) {
-            showAlert("Veuillez remplir tous les champs");
+            showAlert("Veuillez remplir tous les champs.");
             return;
         }
 
-        if (clientDAO.emailExists(email)) {
-            showAlert("Cet email existe déjà !");
+        if (ClientDAO.emailExists(email)) {
+            showAlert("Cet email est déjà utilisé !");
             return;
         }
 
         Client c = new Client(
-                0,
-                "User",     // pseudo par défaut
+                0,              // ID auto
+                "User",         // pseudo par défaut
                 nom,
-                "",
-                "",
+                "",             // prenom vide
+                "",             // numero vide
                 email,
                 mdp,
-                "",
-                false,
-                "CLIENT"
+                "",             // adresse vide
+                false,          // isAdmin
+                "CLIENT"        // rôle par défaut
         );
 
-        if (clientDAO.register(c)) {
+        if (ClientDAO.register(c)) {
+            showAlert("Inscription réussie !");
             App.loadPage("Login.fxml");
         } else {
             showAlert("Erreur lors de l'inscription.");

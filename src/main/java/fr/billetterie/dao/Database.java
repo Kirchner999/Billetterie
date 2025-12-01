@@ -10,24 +10,14 @@ public class Database {
     private static final String USER = "root";
     private static final String PASS = "";
 
-    private static Connection connection;
-
     public static Connection getConnection() {
-        // Si déjà connectée → réutiliser
         try {
-            if (connection != null && !connection.isClosed()) {
-                return connection;
-            }
-        } catch (SQLException ignored) {}
-
-        try {
-            connection = DriverManager.getConnection(URL, USER, PASS);
-            System.out.println("✅ Connexion MySQL établie !");
+            Connection conn = DriverManager.getConnection(URL, USER, PASS);
+            System.out.println("✔ Connexion MySQL établie !");
+            return conn;
         } catch (SQLException e) {
-            System.err.println("❌ Erreur de connexion MySQL : " + e.getMessage());
-            connection = null;
+            System.out.println("❌ Erreur MySQL : " + e.getMessage());
+            return null;
         }
-
-        return connection;
     }
 }
