@@ -75,9 +75,39 @@
     -fx-spacing: 8;
 }
 
+.event-poster {
+    -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.18), 22, 0.15, 0, 8);
+    -fx-background-radius: 16;
+    -fx-border-radius: 16;
+}
+
+.catalog-toolbar {
+    -fx-background-color: linear-gradient(to right, rgba(255,255,255,0.96), rgba(232,240,255,0.95));
+}
+
+.catalog-chip {
+    -fx-background-color: rgba(58,122,254,0.08);
+    -fx-text-fill: #24437a;
+}
+
+.catalog-chip-active {
+    -fx-background-color: #1d4ed8;
+    -fx-text-fill: white;
+}
+
 .event-meta {
     -fx-font-size: 13px;
     -fx-text-fill: #475569;
+}
+
+.event-teaser {
+    -fx-font-size: 13px;
+    -fx-text-fill: #334155;
+    -fx-line-spacing: 2px;
+}
+
+.event-action {
+    -fx-padding: 10 16;
 }
 
 .event-status {

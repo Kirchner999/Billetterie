@@ -28,8 +28,11 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -37,6 +40,7 @@ import javafx.scene.layout.VBox;
 
 import java.awt.Desktop;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -44,6 +48,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -76,12 +81,23 @@ public class ClientDashboardController {
 
     @FXML
     public void showSpectacles() {
+        renderSpectaclesPage("", "all", "date");
+    }
+
+    private void renderSpectaclesPage(String searchText, String filterMode, String sortMode) {
         List<Ticket> tickets = ticketStoreRepository.getAvailableTickets();
+        List<Ticket> visibleTickets = filterTickets(tickets, searchText, filterMode, sortMode);
+
         VBox page = createPageBox();
-        page.getChildren().addAll(
-                buildSectionTitle("Evenements disponibles", tickets.size() + " spectacle(s) a venir"),
-                tickets.isEmpty() ? buildEmptyState("Aucun evenement disponible pour le moment.") : buildEventsList(tickets)
-        );
+        page.getChildren().add(buildSectionTitle("Evenements disponibles", tickets.size() + " spectacle(s) a venir"));
+        page.getChildren().add(buildSpectaclesToolbar(tickets, searchText, filterMode, sortMode, visibleTickets.size()));
+        page.getChildren().add(buildSpectaclesStats(visibleTickets));
+
+        if (visibleTickets.isEmpty()) {
+            page.getChildren().add(buildEmptyState("Aucun spectacle ne correspond aux filtres actuels."));
+        } else {
+            page.getChildren().add(buildEventsList(visibleTickets));
+        }
 
         contentPane.getChildren().setAll(page);
     }
@@ -295,33 +311,184 @@ public class ClientDashboardController {
         return list;
     }
 
+    private VBox buildSpectaclesToolbar(List<Ticket> allTickets, String searchText, String filterMode, String sortMode, int visibleCount) {
+        VBox wrapper = new VBox(12);
+        wrapper.getStyleClass().addAll("card", "catalog-toolbar");
+
+        TextField searchField = new TextField(searchText);
+        searchField.setPromptText("Rechercher un spectacle, un lieu, un mot-cle...");
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+
+        Button applySearchButton = new Button("Appliquer");
+        applySearchButton.setOnAction(event -> renderSpectaclesPage(searchField.getText(), filterMode, sortMode));
+        searchField.setOnAction(event -> renderSpectaclesPage(searchField.getText(), filterMode, sortMode));
+
+        HBox searchRow = new HBox(10, searchField, applySearchButton);
+
+        HBox filterRow = new HBox(10,
+                buildCatalogFilterButton("Tous", filterMode.equals("all"), () -> renderSpectaclesPage(searchField.getText(), "all", sortMode)),
+                buildCatalogFilterButton("Petits stocks", filterMode.equals("low-stock"), () -> renderSpectaclesPage(searchField.getText(), "low-stock", sortMode)),
+                buildCatalogFilterButton("Budget malin", filterMode.equals("budget"), () -> renderSpectaclesPage(searchField.getText(), "budget", sortMode)),
+                buildCatalogFilterButton("Premium", filterMode.equals("premium"), () -> renderSpectaclesPage(searchField.getText(), "premium", sortMode))
+        );
+
+        HBox sortRow = new HBox(10,
+                buildCatalogFilterButton("Par date", sortMode.equals("date"), () -> renderSpectaclesPage(searchField.getText(), filterMode, "date")),
+                buildCatalogFilterButton("Prix croissant", sortMode.equals("price-asc"), () -> renderSpectaclesPage(searchField.getText(), filterMode, "price-asc")),
+                buildCatalogFilterButton("Prix decroissant", sortMode.equals("price-desc"), () -> renderSpectaclesPage(searchField.getText(), filterMode, "price-desc"))
+        );
+
+        Label summary = new Label(visibleCount + " resultat(s) sur " + allTickets.size() + " evenement(s) disponibles");
+        summary.getStyleClass().add("section-subtitle");
+
+        wrapper.getChildren().addAll(searchRow, filterRow, sortRow, summary);
+        return wrapper;
+    }
+
+    private Button buildCatalogFilterButton(String text, boolean active, Runnable action) {
+        Button button = new Button(text);
+        button.getStyleClass().add("button-secondary");
+        button.getStyleClass().add(active ? "catalog-chip-active" : "catalog-chip");
+        button.setOnAction(event -> action.run());
+        return button;
+    }
+
+    private HBox buildSpectaclesStats(List<Ticket> tickets) {
+        long lowStock = tickets.stream().filter(ticket -> ticket.stock() <= 5).count();
+        String averagePrice = tickets.isEmpty()
+                ? "-"
+                : tickets.stream()
+                .map(Ticket::price)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(tickets.size()), 2, RoundingMode.HALF_UP)
+                .stripTrailingZeros()
+                .toPlainString() + " EUR";
+        String nextDate = tickets.isEmpty() ? "-" : DATE_FORMAT.format(tickets.getFirst().eventDate());
+
+        return new HBox(16,
+                buildStatCard("Catalogue affiche", String.valueOf(tickets.size()), "Spectacles apres filtres"),
+                buildStatCard("Prix moyen", averagePrice, "Repere rapide"),
+                buildStatCard("Places limitees", String.valueOf(lowStock), "Stocks sous tension"),
+                buildStatCard("Plus proche date", nextDate, "Prochain rideau")
+        );
+    }
+
+    private List<Ticket> filterTickets(List<Ticket> tickets, String searchText, String filterMode, String sortMode) {
+        String normalizedSearch = searchText == null ? "" : searchText.trim().toLowerCase(Locale.ROOT);
+
+        Comparator<Ticket> comparator = switch (sortMode) {
+            case "price-asc" -> Comparator.comparing(Ticket::price).thenComparing(Ticket::eventDate);
+            case "price-desc" -> Comparator.comparing(Ticket::price).reversed().thenComparing(Ticket::eventDate);
+            default -> Comparator.comparing(Ticket::eventDate).thenComparing(Ticket::price);
+        };
+
+        return tickets.stream()
+                .filter(ticket -> normalizedSearch.isBlank() || ticket.eventName().toLowerCase(Locale.ROOT).contains(normalizedSearch))
+                .filter(ticket -> switch (filterMode) {
+                    case "low-stock" -> ticket.stock() <= 5;
+                    case "budget" -> ticket.price().compareTo(BigDecimal.valueOf(70)) <= 0;
+                    case "premium" -> ticket.price().compareTo(BigDecimal.valueOf(80)) >= 0;
+                    default -> true;
+                })
+                .sorted(comparator)
+                .toList();
+    }
+
     private VBox buildEventCard(Ticket ticket) {
-        VBox card = new VBox(10);
+        VBox card = new VBox(14);
         card.getStyleClass().addAll("card", "event-card");
 
+        ImageView poster = buildPosterView(ticket);
+
+        HBox topRow = new HBox(12);
         Label title = new Label(ticket.eventName());
         title.getStyleClass().add("card-title");
+        HBox.setHgrow(title, Priority.ALWAYS);
+
+        Label pricePill = new Label(ticket.price() + " EUR");
+        pricePill.getStyleClass().addAll("event-status", "status-info");
+        topRow.getChildren().addAll(title, pricePill);
 
         Label date = new Label("Date: " + DATE_FORMAT.format(ticket.eventDate()));
         date.getStyleClass().add("event-meta");
 
-        Label price = new Label("Prix: " + ticket.price() + " EUR");
-        price.getStyleClass().add("event-meta");
-
-        Label stock = new Label("Places restantes: " + ticket.stock());
+        String stockTone = ticket.stock() <= 5 ? "Places limitees" : ticket.stock() <= 10 ? "Bon rythme de vente" : "Large disponibilite";
+        Label stock = new Label("Places restantes: " + ticket.stock() + "  •  " + stockTone);
         stock.getStyleClass().add("event-meta");
 
-        Label status = new Label(ticket.stock() <= 5 ? "Places limitees" : "Disponible");
-        status.getStyleClass().addAll("event-status", ticket.stock() <= 5 ? "status-warning" : "status-success");
+        HBox badges = new HBox(10,
+                buildStatusBadge(ticket.stock() <= 5 ? "Urgent" : "Reserve ouverte", ticket.stock() <= 5 ? "status-warning" : "status-success"),
+                buildStatusBadge(ticket.price().compareTo(BigDecimal.valueOf(70)) <= 0 ? "Budget" : ticket.price().compareTo(BigDecimal.valueOf(80)) >= 0 ? "Premium" : "Standard", "status-info")
+        );
+
+        Label teaser = new Label(buildEventTeaser(ticket));
+        teaser.getStyleClass().add("event-teaser");
+        teaser.setWrapText(true);
 
         Button action = new Button("Choisir mes places");
         action.setOnAction(event -> handlePurchase(ticket));
+        action.getStyleClass().add("event-action");
 
-        HBox footer = new HBox(12, status, action);
+        HBox footer = new HBox(12, badges, action);
         footer.setPadding(new Insets(6, 0, 0, 0));
+        HBox.setHgrow(badges, Priority.ALWAYS);
 
-        card.getChildren().addAll(title, date, price, stock, footer);
+        card.getChildren().addAll(poster, topRow, date, stock, teaser, footer);
         return card;
+    }
+
+    private ImageView buildPosterView(Ticket ticket) {
+        String posterPath = resolvePosterPath(ticket);
+        Image image;
+        try (var stream = getClass().getResourceAsStream(posterPath)) {
+            if (stream == null) {
+                throw new IllegalStateException("Poster introuvable");
+            }
+            image = new Image(stream);
+        } catch (Exception e) {
+            try (var fallback = getClass().getResourceAsStream("/posters/default-show.png")) {
+                image = new Image(fallback);
+            } catch (Exception fallbackError) {
+                image = null;
+            }
+        }
+
+        ImageView poster = new ImageView(image);
+        poster.setFitHeight(190);
+        poster.setFitWidth(320);
+        poster.setPreserveRatio(false);
+        poster.getStyleClass().add("event-poster");
+        return poster;
+    }
+
+    private String resolvePosterPath(Ticket ticket) {
+        String eventName = ticket.eventName().toLowerCase(Locale.ROOT);
+        if (eventName.contains("miserables")) {
+            return "/posters/les-miserables.png";
+        }
+        if (eventName.contains("romeo") || eventName.contains("juliette")) {
+            return "/posters/romeo-juliette.png";
+        }
+        if (eventName.contains("cygnes")) {
+            return "/posters/lac-cygnes.png";
+        }
+        if (eventName.contains("starmania")) {
+            return "/posters/starmania.png";
+        }
+        if (eventName.contains("roi lion")) {
+            return "/posters/roi-lion.png";
+        }
+        return "/posters/default-show.png";
+    }
+
+    private String buildEventTeaser(Ticket ticket) {
+        if (ticket.price().compareTo(BigDecimal.valueOf(70)) <= 0) {
+            return "Bon point d'entree pour reserver rapidement sans sacrifier la date. Ideal si tu veux un achat simple et efficace.";
+        }
+        if (ticket.stock() <= 5) {
+            return "Le stock commence a tirer. Si cette date t'interesse vraiment, ce n'est plus le moment d'attendre.";
+        }
+        return "Une seance confortable avec encore du choix. Tu peux viser les meilleures places sans pression immediate.";
     }
 
     private VBox buildSectionTitle(String titleText, String subtitleText) {
@@ -415,7 +582,7 @@ public class ClientDashboardController {
 
         TicketReceiptDocument receipt = generateReceipt(ticket, purchasedQuantity, purchasedSeats, purchaseResult.purchaseId());
         showPurchaseSuccess(purchaseResult, receipt);
-        showSpectacles();
+        renderSpectaclesPage("", "all", "date");
     }
 
     private TicketReceiptDocument generateReceipt(Ticket ticket, int quantity, List<Seat> seats, Integer purchaseId) {
