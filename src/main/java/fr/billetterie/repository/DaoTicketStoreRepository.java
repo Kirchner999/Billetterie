@@ -2,6 +2,7 @@ package fr.billetterie.repository;
 
 import fr.billetterie.dao.TicketCatalogDAO;
 import fr.billetterie.model.Purchase;
+import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
 
 import java.util.List;
@@ -14,12 +15,17 @@ public class DaoTicketStoreRepository implements TicketStoreRepository {
     }
 
     @Override
+    public List<Seat> getAvailableSeats(int ticketId) {
+        return TicketCatalogDAO.getAvailableSeats(ticketId);
+    }
+
+    @Override
     public List<Purchase> getPurchasesByUser(int userId) {
         return TicketCatalogDAO.getPurchasesByUser(userId);
     }
 
     @Override
-    public PurchaseOperationResult purchaseTicket(int userId, int ticketId, int quantity) {
-        return TicketCatalogDAO.purchaseTicket(userId, ticketId, quantity);
+    public PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
+        return TicketCatalogDAO.purchaseTicket(userId, ticketId, seatIds, quantity);
     }
 }

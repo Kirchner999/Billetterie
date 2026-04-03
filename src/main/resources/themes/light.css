@@ -3,7 +3,6 @@
     -fx-font-family: "Segoe UI", sans-serif;
 }
 
-/* ----------- GLASS CARD ----------- */
 .glass {
     -fx-background-color: rgba(255, 255, 255, 0.55);
     -fx-background-radius: 20;
@@ -14,14 +13,12 @@
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.20), 15, 0.1, 0, 6);
 }
 
-/* ----------- TITRES ----------- */
 .title {
     -fx-font-size: 26px;
     -fx-font-weight: bold;
     -fx-text-fill: #1a1a1a;
 }
 
-/* ----------- INPUTS ----------- */
 .text-field,
 .password-field {
     -fx-background-color: rgba(255,255,255,0.80);
@@ -38,7 +35,6 @@
     -fx-border-color: #3a7afe;
 }
 
-/* ----------- BUTTONS ----------- */
 .button {
     -fx-background-color: #3a7afe;
     -fx-text-fill: white;
@@ -61,11 +57,32 @@
     -fx-background-color: rgba(0,0,0,0.15);
 }
 
-/* ----------- LINKS ----------- */
 .hyperlink {
     -fx-text-fill: #0066cc;
 }
 
 .hyperlink:hover {
     -fx-text-fill: #1a80ff;
+}
+
+.seat-instructions {
+    -fx-text-fill: #333;
+    -fx-font-size: 13px;
+}
+
+.seat-button {
+    -fx-background-color: #dfe9ff;
+    -fx-text-fill: #17326b;
+    -fx-border-color: #8fb0ff;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 8 10;
+    -fx-font-weight: bold;
+}
+
+.seat-button:selected,
+.label.seat-button.selected {
+    -fx-background-color: #3a7afe;
+    -fx-text-fill: white;
+    -fx-border-color: #2a62cf;
 }

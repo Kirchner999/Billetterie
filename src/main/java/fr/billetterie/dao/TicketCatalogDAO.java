@@ -1,6 +1,7 @@
 package fr.billetterie.dao;
 
 import fr.billetterie.model.Purchase;
+import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
 import fr.billetterie.repository.PurchaseOperationResult;
 
@@ -44,6 +45,31 @@ public class TicketCatalogDAO {
         return tickets;
     }
 
+    public static List<Seat> getAvailableSeats(int ticketId) {
+        List<Seat> seats = new ArrayList<>();
+        String sql = "SELECT id, seat_row, seat_number FROM seats WHERE ticket_id = ? AND is_taken = 0 ORDER BY seat_row, seat_number";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+
+            pst.setInt(1, ticketId);
+            try (ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    seats.add(new Seat(
+                            rs.getInt("id"),
+                            rs.getString("seat_row"),
+                            rs.getInt("seat_number")
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getAvailableSeats()");
+            e.printStackTrace();
+        }
+
+        return seats;
+    }
+
     public static List<Purchase> getPurchasesByUser(int userId) {
         List<Purchase> purchases = new ArrayList<>();
         String sql = """
@@ -78,9 +104,8 @@ public class TicketCatalogDAO {
         return purchases;
     }
 
-    public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, int quantity) {
+    public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
         String ticketSql = "SELECT event_name, price, stock FROM tickets WHERE id = ? FOR UPDATE";
-        String seatsSql = "SELECT id FROM seats WHERE ticket_id = ? AND is_taken = 0 ORDER BY seat_row, seat_number LIMIT ?";
         String stockUpdateSql = "UPDATE tickets SET stock = stock - ? WHERE id = ?";
         String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date) VALUES (?, ?, ?, ?, NOW())";
 
@@ -104,16 +129,30 @@ public class TicketCatalogDAO {
                     }
                 }
 
+                if (quantity <= 0) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("La quantite doit etre superieure a 0.");
+                }
+
                 if (stock < quantity) {
                     conn.rollback();
                     return PurchaseOperationResult.failure("Stock insuffisant pour cet evenement.");
                 }
 
-                List<Integer> seatIds = getAvailableSeatIds(conn, ticketId, quantity);
                 int totalSeatCount = countSeatsForTicket(conn, ticketId);
-                if (totalSeatCount > 0 && seatIds.size() < quantity) {
-                    conn.rollback();
-                    return PurchaseOperationResult.failure("Pas assez de sieges libres pour cet evenement.");
+                if (totalSeatCount > 0) {
+                    if (seatIds == null || seatIds.isEmpty()) {
+                        conn.rollback();
+                        return PurchaseOperationResult.failure("Choisis des sieges pour cet evenement.");
+                    }
+                    if (seatIds.size() != quantity) {
+                        conn.rollback();
+                        return PurchaseOperationResult.failure("Le nombre de sieges choisis doit correspondre a la quantite.");
+                    }
+                    if (!selectedSeatsAreAvailable(conn, ticketId, seatIds)) {
+                        conn.rollback();
+                        return PurchaseOperationResult.failure("Un ou plusieurs sieges selectionnes ne sont plus disponibles.");
+                    }
                 }
 
                 try (PreparedStatement pst = conn.prepareStatement(stockUpdateSql)) {
@@ -131,7 +170,7 @@ public class TicketCatalogDAO {
                     pst.executeUpdate();
                 }
 
-                if (!seatIds.isEmpty()) {
+                if (seatIds != null && !seatIds.isEmpty()) {
                     markSeatsTaken(conn, seatIds);
                 }
 
@@ -158,29 +197,27 @@ public class TicketCatalogDAO {
         return count("SELECT COUNT(*) FROM purchases");
     }
 
-    private static List<Integer> getAvailableSeatIds(Connection conn, int ticketId, int quantity) throws SQLException {
-        List<Integer> seatIds = new ArrayList<>();
-        String sql = "SELECT id FROM seats WHERE ticket_id = ? AND is_taken = 0 ORDER BY seat_row, seat_number LIMIT ?";
-
-        try (PreparedStatement pst = conn.prepareStatement(sql)) {
-            pst.setInt(1, ticketId);
-            pst.setInt(2, quantity);
-            try (ResultSet rs = pst.executeQuery()) {
-                while (rs.next()) {
-                    seatIds.add(rs.getInt("id"));
-                }
-            }
-        }
-
-        return seatIds;
-    }
-
     private static int countSeatsForTicket(Connection conn, int ticketId) throws SQLException {
         String sql = "SELECT COUNT(*) FROM seats WHERE ticket_id = ?";
         try (PreparedStatement pst = conn.prepareStatement(sql)) {
             pst.setInt(1, ticketId);
             try (ResultSet rs = pst.executeQuery()) {
                 return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    private static boolean selectedSeatsAreAvailable(Connection conn, int ticketId, List<Integer> seatIds) throws SQLException {
+        String placeholders = seatIds.stream().map(id -> "?").collect(Collectors.joining(", "));
+        String sql = "SELECT COUNT(*) FROM seats WHERE ticket_id = ? AND is_taken = 0 AND id IN (" + placeholders + ")";
+
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, ticketId);
+            for (int i = 0; i < seatIds.size(); i++) {
+                pst.setInt(i + 2, seatIds.get(i));
+            }
+            try (ResultSet rs = pst.executeQuery()) {
+                return rs.next() && rs.getInt(1) == seatIds.size();
             }
         }
     }
