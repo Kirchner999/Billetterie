@@ -28,4 +28,9 @@ public class DaoTicketStoreRepository implements TicketStoreRepository {
     public PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
         return TicketCatalogDAO.purchaseTicket(userId, ticketId, seatIds, quantity);
     }
+
+    @Override
+    public boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath) {
+        return TicketCatalogDAO.saveReceiptDocument(purchaseId, ticketNumber, pdfPath);
+    }
 }

@@ -107,6 +107,7 @@ public class TicketCatalogDAO {
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
             try {
+                ensurePurchaseReceiptColumns(conn);
                 try (PreparedStatement pst = conn.prepareStatement(deletePurchasesSql)) {
                     pst.setInt(1, ticketId);
                     pst.executeUpdate();
@@ -163,28 +164,32 @@ public class TicketCatalogDAO {
     public static List<Purchase> getPurchasesByUser(int userId) {
         List<Purchase> purchases = new ArrayList<>();
         String sql = """
-                SELECT p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date
+                SELECT p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, p.ticket_number, p.pdf_path
                 FROM purchases p
                 JOIN tickets t ON t.id = p.ticket_id
                 WHERE p.user_id = ?
                 ORDER BY p.purchase_date DESC
                 """;
 
-        try (Connection conn = Database.getConnection();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
-
-            pst.setInt(1, userId);
-            ResultSet rs = pst.executeQuery();
-            while (rs.next()) {
-                purchases.add(new Purchase(
-                        rs.getInt("id"),
-                        rs.getInt("user_id"),
-                        rs.getInt("ticket_id"),
-                        rs.getString("event_name"),
-                        rs.getInt("quantity"),
-                        rs.getBigDecimal("total"),
-                        rs.getTimestamp("purchase_date").toLocalDateTime()
-                ));
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseReceiptColumns(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setInt(1, userId);
+                try (ResultSet rs = pst.executeQuery()) {
+                    while (rs.next()) {
+                        purchases.add(new Purchase(
+                                rs.getInt("id"),
+                                rs.getInt("user_id"),
+                                rs.getInt("ticket_id"),
+                                rs.getString("event_name"),
+                                rs.getInt("quantity"),
+                                rs.getBigDecimal("total"),
+                                rs.getTimestamp("purchase_date").toLocalDateTime(),
+                                rs.getString("ticket_number"),
+                                rs.getString("pdf_path")
+                        ));
+                    }
+                }
             }
         } catch (Exception e) {
             System.out.println("Erreur getPurchasesByUser()");
@@ -197,11 +202,13 @@ public class TicketCatalogDAO {
     public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
         String ticketSql = "SELECT event_name, price, stock FROM tickets WHERE id = ? FOR UPDATE";
         String stockUpdateSql = "UPDATE tickets SET stock = stock - ? WHERE id = ?";
-        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date) VALUES (?, ?, ?, ?, NOW())";
+        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date, ticket_number, pdf_path) VALUES (?, ?, ?, ?, NOW(), NULL, NULL)";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
             try {
+                ensurePurchaseReceiptColumns(conn);
+
                 String eventName;
                 BigDecimal price;
                 int stock;
@@ -252,12 +259,19 @@ public class TicketCatalogDAO {
                 }
 
                 BigDecimal total = price.multiply(BigDecimal.valueOf(quantity));
+                Integer purchaseId = null;
                 try (PreparedStatement pst = conn.prepareStatement(purchaseSql, Statement.RETURN_GENERATED_KEYS)) {
                     pst.setInt(1, userId);
                     pst.setInt(2, ticketId);
                     pst.setInt(3, quantity);
                     pst.setBigDecimal(4, total);
                     pst.executeUpdate();
+
+                    try (ResultSet keys = pst.getGeneratedKeys()) {
+                        if (keys.next()) {
+                            purchaseId = keys.getInt(1);
+                        }
+                    }
                 }
 
                 if (seatIds != null && !seatIds.isEmpty()) {
@@ -265,7 +279,7 @@ public class TicketCatalogDAO {
                 }
 
                 conn.commit();
-                return PurchaseOperationResult.success("Achat confirme pour " + eventName + " (x" + quantity + ").");
+                return PurchaseOperationResult.success("Achat confirme pour " + eventName + " (x" + quantity + ").", purchaseId);
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
@@ -279,6 +293,23 @@ public class TicketCatalogDAO {
         }
     }
 
+    public static boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath) {
+        String sql = "UPDATE purchases SET ticket_number = ?, pdf_path = ? WHERE id = ?";
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseReceiptColumns(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setString(1, ticketNumber);
+                pst.setString(2, pdfPath);
+                pst.setInt(3, purchaseId);
+                return pst.executeUpdate() > 0;
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur saveReceiptDocument()");
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public static int cleanupExpiredTickets() {
         String expiredIdsSql = "SELECT id FROM tickets WHERE event_date < NOW()";
         String deletePurchasesSql = "DELETE FROM purchases WHERE ticket_id = ?";
@@ -288,6 +319,7 @@ public class TicketCatalogDAO {
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
             try {
+                ensurePurchaseReceiptColumns(conn);
                 List<Integer> expiredIds = new ArrayList<>();
                 try (PreparedStatement pst = conn.prepareStatement(expiredIdsSql);
                      ResultSet rs = pst.executeQuery()) {
@@ -342,6 +374,25 @@ public class TicketCatalogDAO {
                 rs.getBigDecimal("price"),
                 rs.getInt("stock")
         );
+    }
+
+    private static void ensurePurchaseReceiptColumns(Connection conn) throws SQLException {
+        if (!columnExists(conn, "purchases", "ticket_number")) {
+            try (Statement st = conn.createStatement()) {
+                st.executeUpdate("ALTER TABLE purchases ADD COLUMN ticket_number VARCHAR(120) NULL");
+            }
+        }
+        if (!columnExists(conn, "purchases", "pdf_path")) {
+            try (Statement st = conn.createStatement()) {
+                st.executeUpdate("ALTER TABLE purchases ADD COLUMN pdf_path VARCHAR(500) NULL");
+            }
+        }
+    }
+
+    private static boolean columnExists(Connection conn, String tableName, String columnName) throws SQLException {
+        try (ResultSet rs = conn.getMetaData().getColumns(conn.getCatalog(), null, tableName, columnName)) {
+            return rs.next();
+        }
     }
 
     private static int countSeatsForTicket(Connection conn, int ticketId) throws SQLException {

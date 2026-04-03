@@ -22,6 +22,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputDialog;
@@ -34,6 +35,7 @@ import javafx.scene.layout.VBox;
 import java.awt.Desktop;
 import java.math.BigDecimal;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -120,6 +122,75 @@ public class ClientDashboardController {
         contentPane.getChildren().setAll(page);
     }
 
+    @FXML
+    public void showMesBilletsPdf() {
+        Client user = App.getCurrentUser();
+        if (user == null) {
+            contentPane.getChildren().setAll(buildEmptyState("Aucun utilisateur connecte."));
+            return;
+        }
+
+        List<Purchase> purchases = ticketStoreRepository.getPurchasesByUser(user.getId()).stream()
+                .filter(purchase -> purchase.ticketNumber() != null && purchase.pdfPath() != null)
+                .toList();
+
+        VBox page = createPageBox();
+        page.getChildren().add(buildSectionTitle("Mes billets PDF", purchases.size() + " billet(s) disponible(s)"));
+
+        if (purchases.isEmpty()) {
+            page.getChildren().add(buildEmptyState("Aucun billet PDF enregistre pour le moment."));
+            contentPane.getChildren().setAll(page);
+            return;
+        }
+
+        TableView<Purchase> tableView = new TableView<>();
+        tableView.getStyleClass().add("data-table");
+        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        tableView.setItems(FXCollections.observableArrayList(purchases));
+        VBox.setVgrow(tableView, Priority.ALWAYS);
+
+        TableColumn<Purchase, String> ticketNumberColumn = new TableColumn<>("Numero");
+        ticketNumberColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().ticketNumber()));
+
+        TableColumn<Purchase, String> eventColumn = new TableColumn<>("Evenement");
+        eventColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+
+        TableColumn<Purchase, String> dateColumn = new TableColumn<>("Achat");
+        dateColumn.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().purchaseDate())));
+
+        TableColumn<Purchase, String> pathColumn = new TableColumn<>("Fichier");
+        pathColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().pdfPath()));
+
+        TableColumn<Purchase, Purchase> actionColumn = new TableColumn<>("Action");
+        actionColumn.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue()));
+        actionColumn.setCellFactory(column -> new TableCell<>() {
+            private final Button openButton = new Button("Ouvrir");
+
+            {
+                openButton.setOnAction(event -> {
+                    Purchase purchase = getItem();
+                    if (purchase != null) {
+                        openPurchasePdf(purchase);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Purchase item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setGraphic(null);
+                } else {
+                    setGraphic(openButton);
+                }
+            }
+        });
+
+        tableView.getColumns().setAll(ticketNumberColumn, eventColumn, dateColumn, pathColumn, actionColumn);
+        page.getChildren().add(tableView);
+        contentPane.getChildren().setAll(page);
+    }
+
     private void showClientHome() {
         Client user = App.getCurrentUser();
         List<Ticket> tickets = ticketStoreRepository.getAvailableTickets();
@@ -134,7 +205,7 @@ public class ClientDashboardController {
         HBox stats = new HBox(16,
                 buildStatCard("Evenements a venir", String.valueOf(tickets.size()), "Catalogue disponible"),
                 buildStatCard("Achats effectues", String.valueOf(purchases.size()), "Historique client"),
-                buildStatCard("Prochain evenement", tickets.isEmpty() ? "-" : DATE_FORMAT.format(tickets.getFirst().eventDate()), "Date la plus proche")
+                buildStatCard("Billets PDF", String.valueOf(purchases.stream().filter(p -> p.pdfPath() != null).count()), "Documents retrouves" )
         );
         page.getChildren().add(stats);
 
@@ -268,19 +339,21 @@ public class ClientDashboardController {
             return;
         }
 
-        TicketReceiptDocument receipt = generateReceipt(ticket, purchasedQuantity, purchasedSeats);
+        TicketReceiptDocument receipt = generateReceipt(ticket, purchasedQuantity, purchasedSeats, purchaseResult.purchaseId());
         showPurchaseSuccess(purchaseResult, receipt);
         showSpectacles();
     }
 
-    private TicketReceiptDocument generateReceipt(Ticket ticket, int quantity, List<Seat> seats) {
+    private TicketReceiptDocument generateReceipt(Ticket ticket, int quantity, List<Seat> seats, Integer purchaseId) {
         Client user = App.getCurrentUser();
-        if (user == null) {
+        if (user == null || purchaseId == null) {
             return null;
         }
 
         try {
-            return ticketPdfService.generateReceipt(user, ticket, quantity, seats);
+            TicketReceiptDocument receipt = ticketPdfService.generateReceipt(user, ticket, quantity, seats);
+            boolean saved = ticketStoreRepository.saveReceiptDocument(purchaseId, receipt.ticketNumber(), receipt.pdfPath().toString());
+            return saved ? receipt : null;
         } catch (Exception e) {
             return null;
         }
@@ -303,28 +376,37 @@ public class ClientDashboardController {
             alert.setContentText(content);
             Optional<ButtonType> response = alert.showAndWait();
             if (response.isPresent() && response.get() == openPdfButton) {
-                openReceipt(receipt);
+                openReceiptPath(receipt.pdfPath());
             }
             return;
         }
 
-        alert.setContentText(content + "\n\nLe billet PDF n'a pas pu etre genere.");
+        alert.setContentText(content + "\n\nLe billet PDF n'a pas pu etre genere ou sauvegarde en base.");
         alert.showAndWait();
     }
 
-    private void openReceipt(TicketReceiptDocument receipt) {
+    private void openPurchasePdf(Purchase purchase) {
+        if (purchase.pdfPath() == null || purchase.pdfPath().isBlank()) {
+            Alert alert = new Alert(Alert.AlertType.WARNING, "Aucun fichier PDF n'est enregistre pour cet achat.");
+            alert.showAndWait();
+            return;
+        }
+        openReceiptPath(Path.of(purchase.pdfPath()));
+    }
+
+    private void openReceiptPath(Path pdfPath) {
         try {
-            if (Desktop.isDesktopSupported() && Files.exists(receipt.pdfPath())) {
-                Desktop.getDesktop().open(receipt.pdfPath().toFile());
+            if (Desktop.isDesktopSupported() && Files.exists(pdfPath)) {
+                Desktop.getDesktop().open(pdfPath.toFile());
                 return;
             }
         } catch (Exception ignored) {
         }
 
         Alert alert = new Alert(Alert.AlertType.WARNING,
-                "Impossible d'ouvrir automatiquement le PDF.\nChemin: " + receipt.pdfPath());
+                "Impossible d'ouvrir automatiquement le PDF.\nChemin: " + pdfPath);
         alert.setTitle("Ouverture du billet");
-        alert.setHeaderText("Le fichier existe mais n'a pas pu etre ouvert");
+        alert.setHeaderText("Le fichier existe peut-etre mais n'a pas pu etre ouvert");
         alert.showAndWait();
     }
 

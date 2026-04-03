@@ -1,8 +1,11 @@
 USE billetterie;
 
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(120) NULL;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(500) NULL;
+
 INSERT INTO tickets (event_name, event_date, price, stock) VALUES
 ('Les Miserables - Grand Rex', '2026-05-14 20:00:00', 79.90, 12),
-('Roméo et Juliette - Theatre Mogador', '2026-05-21 20:30:00', 69.00, 16),
+('Romeo et Juliette - Theatre Mogador', '2026-05-21 20:30:00', 69.00, 16),
 ('Le Lac des Cygnes - Palais Garnier', '2026-06-03 19:30:00', 95.50, 20),
 ('Starmania Live - Zenith Paris', '2026-06-15 21:00:00', 59.90, 25),
 ('Le Roi Lion - Seance Famille', '2026-07-02 15:00:00', 84.00, 18),

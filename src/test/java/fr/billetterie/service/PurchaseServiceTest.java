@@ -100,7 +100,12 @@ class PurchaseServiceTest {
             this.ticketId = ticketId;
             this.seatIds = seatIds;
             this.quantity = quantity;
-            return PurchaseOperationResult.success("ok");
+            return PurchaseOperationResult.success("ok", 42);
+        }
+
+        @Override
+        public boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath) {
+            return true;
         }
     }
 }

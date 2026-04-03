@@ -15,4 +15,6 @@ public interface TicketStoreRepository {
     List<Purchase> getPurchasesByUser(int userId);
 
     PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity);
+
+    boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath);
 }
