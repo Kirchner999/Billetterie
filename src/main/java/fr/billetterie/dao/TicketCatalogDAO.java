@@ -1,6 +1,7 @@
 package fr.billetterie.dao;
 
 import fr.billetterie.model.AdminPurchaseRecord;
+import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.Purchase;
 import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
@@ -543,6 +544,45 @@ public class TicketCatalogDAO {
         }
 
         return events;
+    }
+
+    public static List<AdminSalesStat> getSalesStatsByTicket() {
+        List<AdminSalesStat> stats = new ArrayList<>();
+        String sql = """
+                SELECT
+                    t.event_name,
+                    COALESCE(SUM(CASE WHEN COALESCE(p.status, 'CONFIRMED') = 'CONFIRMED' THEN 1 ELSE 0 END), 0) AS confirmed_purchases,
+                    COALESCE(SUM(CASE WHEN COALESCE(p.status, 'CONFIRMED') = 'REFUNDED' THEN 1 ELSE 0 END), 0) AS refunded_purchases,
+                    COALESCE(SUM(CASE WHEN COALESCE(p.status, 'CONFIRMED') = 'CANCELLED' THEN 1 ELSE 0 END), 0) AS cancelled_purchases,
+                    COALESCE(SUM(CASE WHEN COALESCE(p.status, 'CONFIRMED') = 'CONFIRMED' THEN p.quantity ELSE 0 END), 0) AS tickets_sold,
+                    COALESCE(SUM(CASE WHEN COALESCE(p.status, 'CONFIRMED') = 'CONFIRMED' THEN p.total ELSE 0 END), 0) AS revenue
+                FROM tickets t
+                LEFT JOIN purchases p ON p.ticket_id = t.id
+                GROUP BY t.id, t.event_name
+                ORDER BY revenue DESC, tickets_sold DESC, t.event_name ASC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql);
+                 ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    stats.add(new AdminSalesStat(
+                            rs.getString("event_name"),
+                            rs.getInt("confirmed_purchases"),
+                            rs.getInt("refunded_purchases"),
+                            rs.getInt("cancelled_purchases"),
+                            rs.getInt("tickets_sold"),
+                            rs.getBigDecimal("revenue")
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getSalesStatsByTicket()");
+            e.printStackTrace();
+        }
+
+        return stats;
     }
 
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {

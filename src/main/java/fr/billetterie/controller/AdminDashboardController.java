@@ -4,6 +4,7 @@ import fr.billetterie.App;
 import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.dao.TicketCatalogDAO;
 import fr.billetterie.model.AdminPurchaseRecord;
+import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.Ticket;
 import fr.billetterie.model.TicketEventLog;
 import fr.billetterie.repository.DaoTicketAdminRepository;
@@ -30,6 +31,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -65,6 +67,9 @@ public class AdminDashboardController {
     @FXML private Button purchasesFilterConfirmedButton;
     @FXML private Button purchasesFilterCancelledButton;
     @FXML private Button purchasesFilterRefundedButton;
+    @FXML private Button purchasesSortDateButton;
+    @FXML private Button purchasesSortUserButton;
+    @FXML private Button purchasesSortAmountButton;
     @FXML private Button purchasesPrevPageButton;
     @FXML private Button purchasesNextPageButton;
     @FXML private Label purchasesPageLabel;
@@ -92,9 +97,20 @@ public class AdminDashboardController {
     @FXML private TableColumn<TicketEventLog, String> colLogTicket;
     @FXML private TableColumn<TicketEventLog, String> colLogDetails;
     @FXML private TextField auditSearchField;
+    @FXML private Button auditSortDateButton;
+    @FXML private Button auditSortTypeButton;
+    @FXML private Button auditSortUserButton;
     @FXML private Button auditPrevPageButton;
     @FXML private Button auditNextPageButton;
     @FXML private Label auditPageLabel;
+
+    @FXML private TableView<AdminSalesStat> salesStatsTable;
+    @FXML private TableColumn<AdminSalesStat, String> colSalesEvent;
+    @FXML private TableColumn<AdminSalesStat, Integer> colSalesConfirmed;
+    @FXML private TableColumn<AdminSalesStat, Integer> colSalesRefunded;
+    @FXML private TableColumn<AdminSalesStat, Integer> colSalesCancelled;
+    @FXML private TableColumn<AdminSalesStat, Integer> colSalesTicketsSold;
+    @FXML private TableColumn<AdminSalesStat, String> colSalesRevenue;
 
     @FXML private TextField eventNameField;
     @FXML private TextField eventDateField;
@@ -107,6 +123,8 @@ public class AdminDashboardController {
     private String purchaseFilterMode = "all";
     private String purchaseSearchText = "";
     private String auditSearchText = "";
+    private String purchaseSortMode = "date-desc";
+    private String auditSortMode = "date-desc";
     private int purchasesPageIndex;
     private int auditPageIndex;
     private List<AdminPurchaseRecord> filteredPurchases = List.of();
@@ -118,6 +136,7 @@ public class AdminDashboardController {
         configurePurchasesTable();
         configureAuditTable();
         configurePurchaseAuditTable();
+        configureSalesStatsTable();
         refreshAdminView();
     }
 
@@ -303,6 +322,48 @@ public class AdminDashboardController {
     }
 
     @FXML
+    public void sortPurchasesByDate() {
+        purchaseSortMode = "date-desc";
+        purchasesPageIndex = 0;
+        refreshPurchases();
+    }
+
+    @FXML
+    public void sortPurchasesByUser() {
+        purchaseSortMode = "user-asc";
+        purchasesPageIndex = 0;
+        refreshPurchases();
+    }
+
+    @FXML
+    public void sortPurchasesByAmount() {
+        purchaseSortMode = "amount-desc";
+        purchasesPageIndex = 0;
+        refreshPurchases();
+    }
+
+    @FXML
+    public void sortAuditByDate() {
+        auditSortMode = "date-desc";
+        auditPageIndex = 0;
+        refreshAudit();
+    }
+
+    @FXML
+    public void sortAuditByType() {
+        auditSortMode = "type-asc";
+        auditPageIndex = 0;
+        refreshAudit();
+    }
+
+    @FXML
+    public void sortAuditByUser() {
+        auditSortMode = "user-asc";
+        auditPageIndex = 0;
+        refreshAudit();
+    }
+
+    @FXML
     public void showPreviousPurchasesPage() {
         if (purchasesPageIndex > 0) {
             purchasesPageIndex--;
@@ -427,6 +488,7 @@ public class AdminDashboardController {
         refreshEvents();
         refreshPurchases();
         refreshAudit();
+        refreshSalesStats();
     }
 
     private void configureEventTable() {
@@ -482,6 +544,15 @@ public class AdminDashboardController {
         colPurchaseLogDetails.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().details() != null ? cell.getValue().details() : "-"));
     }
 
+    private void configureSalesStatsTable() {
+        colSalesEvent.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+        colSalesConfirmed.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().confirmedPurchases()));
+        colSalesRefunded.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().refundedPurchases()));
+        colSalesCancelled.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().cancelledPurchases()));
+        colSalesTicketsSold.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().ticketsSold()));
+        colSalesRevenue.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().revenue() + " EUR"));
+    }
+
     private void refreshEvents() {
         List<Ticket> tickets = TicketCatalogDAO.getAllTickets();
         eventsTable.setItems(FXCollections.observableArrayList(tickets));
@@ -496,16 +567,24 @@ public class AdminDashboardController {
                     default -> true;
                 })
                 .filter(purchase -> matchesPurchaseSearch(purchase, purchaseSearchText))
+                .sorted(buildPurchaseComparator())
                 .toList();
         applyPurchasesPage();
         updatePurchaseFilterButtons();
+        updateSortButtons();
     }
 
     private void refreshAudit() {
         filteredAuditLogs = TicketCatalogDAO.getRecentTicketEvents(100).stream()
                 .filter(log -> matchesAuditSearch(log, auditSearchText))
+                .sorted(buildAuditComparator())
                 .toList();
         applyAuditPage();
+        updateSortButtons();
+    }
+
+    private void refreshSalesStats() {
+        salesStatsTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getSalesStatsByTicket()));
     }
 
     private void showResult(boolean success, String message) {
@@ -519,6 +598,15 @@ public class AdminDashboardController {
         updateFilterButton(purchasesFilterConfirmedButton, "confirmed".equals(purchaseFilterMode));
         updateFilterButton(purchasesFilterCancelledButton, "cancelled".equals(purchaseFilterMode));
         updateFilterButton(purchasesFilterRefundedButton, "refunded".equals(purchaseFilterMode));
+    }
+
+    private void updateSortButtons() {
+        updateFilterButton(purchasesSortDateButton, "date-desc".equals(purchaseSortMode));
+        updateFilterButton(purchasesSortUserButton, "user-asc".equals(purchaseSortMode));
+        updateFilterButton(purchasesSortAmountButton, "amount-desc".equals(purchaseSortMode));
+        updateFilterButton(auditSortDateButton, "date-desc".equals(auditSortMode));
+        updateFilterButton(auditSortTypeButton, "type-asc".equals(auditSortMode));
+        updateFilterButton(auditSortUserButton, "user-asc".equals(auditSortMode));
     }
 
     private void updateFilterButton(Button button, boolean active) {
@@ -574,6 +662,28 @@ public class AdminDashboardController {
 
     private boolean containsIgnoreCase(String value, String query) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(query);
+    }
+
+    private Comparator<AdminPurchaseRecord> buildPurchaseComparator() {
+        return switch (purchaseSortMode) {
+            case "user-asc" -> Comparator.comparing(AdminPurchaseRecord::username, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(AdminPurchaseRecord::purchaseDate, Comparator.reverseOrder());
+            case "amount-desc" -> Comparator.comparing(AdminPurchaseRecord::total, Comparator.reverseOrder())
+                    .thenComparing(AdminPurchaseRecord::purchaseDate, Comparator.reverseOrder());
+            default -> Comparator.comparing(AdminPurchaseRecord::purchaseDate, Comparator.reverseOrder())
+                    .thenComparing(AdminPurchaseRecord::username, String.CASE_INSENSITIVE_ORDER);
+        };
+    }
+
+    private Comparator<TicketEventLog> buildAuditComparator() {
+        return switch (auditSortMode) {
+            case "type-asc" -> Comparator.comparing(TicketEventLog::eventType, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(TicketEventLog::createdAt, Comparator.reverseOrder());
+            case "user-asc" -> Comparator.comparing(TicketEventLog::username, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(TicketEventLog::createdAt, Comparator.reverseOrder());
+            default -> Comparator.comparing(TicketEventLog::createdAt, Comparator.reverseOrder())
+                    .thenComparing(TicketEventLog::eventType, String.CASE_INSENSITIVE_ORDER);
+        };
     }
 
     private boolean matchesAuditSearch(TicketEventLog log, String searchText) {

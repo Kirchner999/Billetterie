@@ -80,6 +80,22 @@
                 </FlowPane>
 
                 <VBox styleClass="card" spacing="14">
+                    <Label text="Stats de vente par spectacle" styleClass="section-title"/>
+                    <Label text="Vue agregée des achats confirmes, remboursements, annulations, billets vendus et chiffre d'affaires." styleClass="section-subtitle" wrapText="true"/>
+
+                    <TableView fx:id="salesStatsTable" prefHeight="220" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colSalesEvent" text="Spectacle" prefWidth="260"/>
+                            <TableColumn fx:id="colSalesConfirmed" text="Confirmes" prefWidth="100"/>
+                            <TableColumn fx:id="colSalesRefunded" text="Rembourses" prefWidth="110"/>
+                            <TableColumn fx:id="colSalesCancelled" text="Annules" prefWidth="100"/>
+                            <TableColumn fx:id="colSalesTicketsSold" text="Billets vendus" prefWidth="120"/>
+                            <TableColumn fx:id="colSalesRevenue" text="CA" prefWidth="120"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+
+                <VBox styleClass="card" spacing="14">
                     <Label text="Gestion des evenements" styleClass="section-title"/>
                     <Label text="Selectionne une ligne pour modifier un evenement existant, ou remplis le formulaire pour en creer un nouveau." styleClass="section-subtitle" wrapText="true"/>
 
@@ -121,6 +137,12 @@
                     <HBox spacing="10">
                         <TextField fx:id="purchaseSearchField" promptText="Rechercher par utilisateur, billet ou spectacle" HBox.hgrow="ALWAYS"/>
                         <Button text="Chercher" onAction="#applyPurchaseSearch"/>
+                    </HBox>
+
+                    <HBox spacing="10">
+                        <Button fx:id="purchasesSortDateButton" text="Tri date" styleClass="button-secondary" onAction="#sortPurchasesByDate"/>
+                        <Button fx:id="purchasesSortUserButton" text="Tri utilisateur" styleClass="button-secondary" onAction="#sortPurchasesByUser"/>
+                        <Button fx:id="purchasesSortAmountButton" text="Tri montant" styleClass="button-secondary" onAction="#sortPurchasesByAmount"/>
                     </HBox>
 
                     <TableView fx:id="purchasesTable" prefHeight="240" styleClass="data-table">
@@ -212,6 +234,12 @@
                         <TextField fx:id="auditSearchField" promptText="Rechercher dans le journal des billets" HBox.hgrow="ALWAYS"/>
                         <Button text="Chercher" onAction="#applyAuditSearch"/>
                         <Button text="Exporter audit CSV" styleClass="button-secondary" onAction="#exportAuditCsv"/>
+                    </HBox>
+
+                    <HBox spacing="10">
+                        <Button fx:id="auditSortDateButton" text="Tri date" styleClass="button-secondary" onAction="#sortAuditByDate"/>
+                        <Button fx:id="auditSortTypeButton" text="Tri type" styleClass="button-secondary" onAction="#sortAuditByType"/>
+                        <Button fx:id="auditSortUserButton" text="Tri utilisateur" styleClass="button-secondary" onAction="#sortAuditByUser"/>
                     </HBox>
 
                     <TableView fx:id="eventsLogTable" prefHeight="260" styleClass="data-table">
