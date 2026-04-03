@@ -9,6 +9,7 @@ import fr.billetterie.repository.DaoTicketStoreRepository;
 import fr.billetterie.repository.PurchaseOperationResult;
 import fr.billetterie.repository.TicketStoreRepository;
 import fr.billetterie.service.PurchaseService;
+import fr.billetterie.service.TicketArchiveService;
 import fr.billetterie.service.TicketPdfService;
 import fr.billetterie.service.TicketReceiptDocument;
 import fr.billetterie.utils.ThemeManager;
@@ -53,6 +54,7 @@ public class ClientDashboardController {
     private final TicketStoreRepository ticketStoreRepository = new DaoTicketStoreRepository();
     private final PurchaseService purchaseService = new PurchaseService(ticketStoreRepository);
     private final TicketPdfService ticketPdfService = new TicketPdfService();
+    private final TicketArchiveService ticketArchiveService = new TicketArchiveService();
 
     @FXML
     public void initialize() {
@@ -147,6 +149,16 @@ public class ClientDashboardController {
             return;
         }
 
+        long existingCount = purchases.stream().filter(this::hasExistingPdf).count();
+        HBox tools = new HBox(12,
+                buildStatusBadge(existingCount + " presents", "status-success"),
+                buildStatusBadge((purchases.size() - existingCount) + " manquants", "status-warning")
+        );
+        Button exportButton = new Button("Exporter mes billets (.zip)");
+        exportButton.setOnAction(event -> exportPurchasesArchive(purchases));
+        tools.getChildren().add(exportButton);
+        page.getChildren().add(tools);
+
         TableView<Purchase> tableView = new TableView<>();
         tableView.getStyleClass().add("data-table");
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
@@ -161,6 +173,23 @@ public class ClientDashboardController {
 
         TableColumn<Purchase, String> seatsColumn = new TableColumn<>("Sieges");
         seatsColumn.setCellValueFactory(cell -> new SimpleStringProperty(displaySeatLabels(cell.getValue().seatLabels())));
+
+        TableColumn<Purchase, String> statusColumn = new TableColumn<>("Etat");
+        statusColumn.setCellValueFactory(cell -> new SimpleStringProperty(resolvePdfStatus(cell.getValue())));
+        statusColumn.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    Label badge = buildStatusBadge(item, item.equals("present") ? "status-success" : item.equals("regenere") ? "status-info" : "status-warning");
+                    setGraphic(badge);
+                    setText(null);
+                }
+            }
+        });
 
         TableColumn<Purchase, String> pathColumn = new TableColumn<>("Fichier");
         pathColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().pdfPath() != null ? cell.getValue().pdfPath() : "Non genere"));
@@ -182,7 +211,7 @@ public class ClientDashboardController {
                 regenerateButton.setOnAction(event -> {
                     Purchase purchase = getItem();
                     if (purchase != null) {
-                        regeneratePurchasePdf(purchase);
+                        regeneratePurchasePdf(purchase, true);
                     }
                 });
             }
@@ -193,13 +222,13 @@ public class ClientDashboardController {
                 if (empty || item == null) {
                     setGraphic(null);
                 } else {
-                    openButton.setDisable(item.pdfPath() == null || item.pdfPath().isBlank() || !Files.exists(Path.of(item.pdfPath())));
+                    openButton.setDisable(!hasExistingPdf(item));
                     setGraphic(box);
                 }
             }
         });
 
-        tableView.getColumns().setAll(ticketNumberColumn, eventColumn, seatsColumn, pathColumn, actionColumn);
+        tableView.getColumns().setAll(ticketNumberColumn, eventColumn, seatsColumn, statusColumn, pathColumn, actionColumn);
         page.getChildren().add(tableView);
         contentPane.getChildren().setAll(page);
     }
@@ -306,6 +335,12 @@ public class ClientDashboardController {
         return box;
     }
 
+    private Label buildStatusBadge(String text, String styleClass) {
+        Label label = new Label(text);
+        label.getStyleClass().addAll("event-status", styleClass);
+        return label;
+    }
+
     private void handlePurchase(Ticket ticket) {
         List<Seat> seats = ticketStoreRepository.getAvailableSeats(ticket.id());
         PurchaseOperationResult purchaseResult;
@@ -375,11 +410,11 @@ public class ClientDashboardController {
         }
     }
 
-    private void regeneratePurchasePdf(Purchase purchase) {
+    private TicketReceiptDocument regeneratePurchasePdf(Purchase purchase, boolean refreshView) {
         Client user = App.getCurrentUser();
         if (user == null) {
             showPurchaseFailure(PurchaseOperationResult.failure("Aucun utilisateur connecte."));
-            return;
+            return null;
         }
 
         LocalDateTime eventDate = ticketStoreRepository.findTicketById(purchase.ticketId())
@@ -391,21 +426,70 @@ public class ClientDashboardController {
             boolean saved = ticketStoreRepository.saveReceiptDocument(purchase.id(), receipt.ticketNumber(), receipt.pdfPath().toString(), purchase.seatLabels());
             if (!saved) {
                 showPurchaseFailure(PurchaseOperationResult.failure("Le PDF a ete regenere mais la base n'a pas pu etre mise a jour."));
-                return;
+                return null;
             }
 
+            if (refreshView) {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                        "Billet regenere.\nNumero: " + receipt.ticketNumber() + "\nChemin: " + receipt.pdfPath());
+                ButtonType openButton = new ButtonType("Ouvrir");
+                ButtonType closeButton = new ButtonType("Fermer");
+                alert.getButtonTypes().setAll(openButton, closeButton);
+                Optional<ButtonType> response = alert.showAndWait();
+                if (response.isPresent() && response.get() == openButton) {
+                    openReceiptPath(receipt.pdfPath());
+                }
+                showMesBilletsPdf();
+            }
+            return receipt;
+        } catch (Exception e) {
+            if (refreshView) {
+                showPurchaseFailure(PurchaseOperationResult.failure("Impossible de regenerer le billet PDF."));
+            }
+            return null;
+        }
+    }
+
+    private void exportPurchasesArchive(List<Purchase> purchases) {
+        Client user = App.getCurrentUser();
+        if (user == null) {
+            return;
+        }
+
+        List<Path> pdfPaths = new ArrayList<>();
+        int regenerated = 0;
+        for (Purchase purchase : purchases) {
+            if (hasExistingPdf(purchase)) {
+                pdfPaths.add(Path.of(purchase.pdfPath()));
+                continue;
+            }
+
+            TicketReceiptDocument regeneratedReceipt = regeneratePurchasePdf(purchase, false);
+            if (regeneratedReceipt != null) {
+                pdfPaths.add(regeneratedReceipt.pdfPath());
+                regenerated++;
+            }
+        }
+
+        if (pdfPaths.isEmpty()) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Aucun PDF exploitable pour l'archive."));
+            return;
+        }
+
+        try {
+            Path archivePath = ticketArchiveService.createArchive(user.getUsername(), pdfPaths);
             Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                    "Billet regenere.\nNumero: " + receipt.ticketNumber() + "\nChemin: " + receipt.pdfPath());
-            ButtonType openButton = new ButtonType("Ouvrir");
+                    "Archive creee: " + archivePath + "\nBillets inclus: " + pdfPaths.size() + "\nBillets regeneres: " + regenerated);
+            ButtonType openButton = new ButtonType("Ouvrir l'archive");
             ButtonType closeButton = new ButtonType("Fermer");
             alert.getButtonTypes().setAll(openButton, closeButton);
             Optional<ButtonType> response = alert.showAndWait();
             if (response.isPresent() && response.get() == openButton) {
-                openReceiptPath(receipt.pdfPath());
+                openReceiptPath(archivePath);
             }
             showMesBilletsPdf();
         } catch (Exception e) {
-            showPurchaseFailure(PurchaseOperationResult.failure("Impossible de regenerer le billet PDF."));
+            showPurchaseFailure(PurchaseOperationResult.failure("Impossible de creer l'archive ZIP."));
         }
     }
 
@@ -444,20 +528,31 @@ public class ClientDashboardController {
         openReceiptPath(Path.of(purchase.pdfPath()));
     }
 
-    private void openReceiptPath(Path pdfPath) {
+    private void openReceiptPath(Path filePath) {
         try {
-            if (Desktop.isDesktopSupported() && Files.exists(pdfPath)) {
-                Desktop.getDesktop().open(pdfPath.toFile());
+            if (Desktop.isDesktopSupported() && Files.exists(filePath)) {
+                Desktop.getDesktop().open(filePath.toFile());
                 return;
             }
         } catch (Exception ignored) {
         }
 
         Alert alert = new Alert(Alert.AlertType.WARNING,
-                "Impossible d'ouvrir automatiquement le PDF.\nChemin: " + pdfPath);
+                "Impossible d'ouvrir automatiquement le fichier.\nChemin: " + filePath);
         alert.setTitle("Ouverture du billet");
         alert.setHeaderText("Le fichier existe peut-etre mais n'a pas pu etre ouvert");
         alert.showAndWait();
+    }
+
+    private boolean hasExistingPdf(Purchase purchase) {
+        return purchase.pdfPath() != null && !purchase.pdfPath().isBlank() && Files.exists(Path.of(purchase.pdfPath()));
+    }
+
+    private String resolvePdfStatus(Purchase purchase) {
+        if (hasExistingPdf(purchase)) {
+            return "present";
+        }
+        return purchase.pdfPath() == null || purchase.pdfPath().isBlank() ? "manquant" : "regenere";
     }
 
     private String displaySeatLabels(String seatLabels) {

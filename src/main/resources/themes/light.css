@@ -182,3 +182,9 @@
     -fx-border-color: #b2b2b2;
     -fx-opacity: 1;
 }
+
+.status-info {
+    -fx-background-color: #dbeafe;
+    -fx-text-fill: #1d4ed8;
+}
+
