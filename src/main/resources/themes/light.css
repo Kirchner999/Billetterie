@@ -28,6 +28,16 @@
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 18, 0.1, 0, 6);
 }
 
+.content-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-padding: 0;
+}
+
+.content-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
 .title {
     -fx-font-size: 26px;
     -fx-font-weight: bold;
