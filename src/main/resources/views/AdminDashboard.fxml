@@ -172,6 +172,10 @@
                             <TableColumn fx:id="colRowRate" text="Occupation" prefWidth="120"/>
                         </columns>
                     </TableView>
+
+                    <HBox fx:id="seatHeatmapLegend" spacing="10"/>
+
+                    <VBox fx:id="seatHeatmapContainer" spacing="10"/>
                 </VBox>
 
                 <VBox styleClass="card" spacing="14">

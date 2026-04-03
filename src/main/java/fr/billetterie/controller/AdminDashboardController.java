@@ -8,6 +8,7 @@ import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
 import fr.billetterie.model.AdminSeatOccupancyStat;
+import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
 import fr.billetterie.model.TicketEventLog;
 import fr.billetterie.repository.DaoTicketAdminRepository;
@@ -19,6 +20,8 @@ import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.PieChart;
@@ -30,6 +33,9 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 
 import java.awt.Desktop;
 import java.io.IOException;
@@ -75,6 +81,8 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowTaken;
     @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowAvailable;
     @FXML private TableColumn<AdminRowOccupancyStat, String> colRowRate;
+    @FXML private HBox seatHeatmapLegend;
+    @FXML private VBox seatHeatmapContainer;
 
     @FXML private TableView<AdminPurchaseRecord> purchasesTable;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseUser;
@@ -613,6 +621,13 @@ public class AdminDashboardController {
             colRowAvailable.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().availableSeats()));
             colRowRate.setCellValueFactory(cell -> new SimpleStringProperty(formatPercent(cell.getValue().occupancyRate())));
         }
+
+        if (seatHeatmapLegend != null && seatHeatmapLegend.getChildren().isEmpty()) {
+            seatHeatmapLegend.getChildren().addAll(
+                    buildLegendChip("Libre", "seat-button"),
+                    buildLegendChip("Pris", "seat-button", "seat-button-taken")
+            );
+        }
     }
 
     private void configurePurchasesTable() {
@@ -729,11 +744,13 @@ public class AdminDashboardController {
         if (ticketId <= 0) {
             rowOccupancyTable.setItems(FXCollections.observableArrayList());
             occupancySelectedEventLabel.setText("-");
+            renderSeatHeatmap(List.of());
             return;
         }
 
         occupancySelectedEventLabel.setText(eventName != null ? eventName : "-");
         rowOccupancyTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getRowOccupancyStats(ticketId)));
+        renderSeatHeatmap(TicketCatalogDAO.getAvailableSeats(ticketId));
     }
 
     private void showResult(boolean success, String message) {
@@ -873,6 +890,68 @@ public class AdminDashboardController {
 
     private String formatPercent(double value) {
         return String.format(Locale.ROOT, "%.1f %%", value);
+    }
+
+    private void renderSeatHeatmap(List<Seat> seats) {
+        if (seatHeatmapContainer == null) {
+            return;
+        }
+
+        seatHeatmapContainer.getChildren().clear();
+        if (seats == null || seats.isEmpty()) {
+            Label empty = new Label("Aucun plan de salle disponible pour ce spectacle.");
+            empty.getStyleClass().add("section-subtitle");
+            seatHeatmapContainer.getChildren().add(empty);
+            return;
+        }
+
+        List<String> rows = seats.stream()
+                .map(Seat::seatRow)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+
+        for (String row : rows) {
+            HBox rowBox = new HBox(10);
+            rowBox.setAlignment(Pos.CENTER_LEFT);
+
+            Label rowLabel = new Label("Rangee " + row);
+            rowLabel.getStyleClass().add("stat-title");
+            rowLabel.setMinWidth(90);
+
+            FlowPane rowSeats = new FlowPane();
+            rowSeats.setHgap(8);
+            rowSeats.setVgap(8);
+            rowSeats.setPrefWrapLength(520);
+
+            seats.stream()
+                    .filter(seat -> row.equalsIgnoreCase(seat.seatRow()))
+                    .sorted(Comparator.comparingInt(Seat::seatNumber))
+                    .forEach(seat -> rowSeats.getChildren().add(buildSeatChip(seat)));
+
+            rowBox.getChildren().addAll(rowLabel, rowSeats);
+            seatHeatmapContainer.getChildren().add(rowBox);
+        }
+    }
+
+    private Label buildSeatChip(Seat seat) {
+        Label chip = new Label(seat.displayLabel());
+        chip.getStyleClass().add("seat-button");
+        if (seat.taken()) {
+            chip.getStyleClass().add("seat-button-taken");
+        }
+        chip.setMinWidth(68);
+        chip.setPrefWidth(68);
+        chip.setAlignment(Pos.CENTER);
+        chip.setPadding(new Insets(8, 10, 8, 10));
+        return chip;
+    }
+
+    private Label buildLegendChip(String text, String... styleClasses) {
+        Label chip = new Label(text);
+        chip.getStyleClass().addAll(styleClasses);
+        chip.setPadding(new Insets(6, 10, 6, 10));
+        return chip;
     }
 
     private boolean matchesPurchaseSearch(AdminPurchaseRecord purchase, String searchText) {
