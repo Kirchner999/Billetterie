@@ -13,7 +13,9 @@ public record AdminPurchaseRecord(
         BigDecimal total,
         String seatLabels,
         String ticketNumber,
+        String pdfPath,
         LocalDateTime purchaseDate,
-        String status
+        String status,
+        LocalDateTime refundedAt
 ) {
 }

@@ -67,6 +67,12 @@
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Remboursements" styleClass="stat-title"/>
+                        <Label fx:id="refundedCountLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Achats rembourss avec remise en stock" styleClass="stat-subtitle"/>
+                    </VBox>
+
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
                         <Label text="Nettoyage" styleClass="stat-title"/>
                         <Label fx:id="expiredCleanupLabel" text="0" styleClass="stat-value"/>
                         <Label text="Evenements expires supprimes au chargement" styleClass="stat-subtitle"/>
@@ -109,6 +115,7 @@
                         <Button fx:id="purchasesFilterAllButton" text="Tous" styleClass="button-secondary" onAction="#showAllPurchases"/>
                         <Button fx:id="purchasesFilterConfirmedButton" text="Confirmes" styleClass="button-secondary" onAction="#showConfirmedPurchases"/>
                         <Button fx:id="purchasesFilterCancelledButton" text="Annules" styleClass="button-secondary" onAction="#showCancelledPurchases"/>
+                        <Button fx:id="purchasesFilterRefundedButton" text="Rembourses" styleClass="button-secondary" onAction="#showRefundedPurchases"/>
                     </HBox>
 
                     <TableView fx:id="purchasesTable" prefHeight="240" styleClass="data-table">
@@ -124,7 +131,61 @@
 
                     <HBox spacing="12">
                         <Button text="Annuler l'achat selectionne" styleClass="button-secondary" onAction="#cancelSelectedPurchase"/>
+                        <Button text="Rembourser l'achat selectionne" styleClass="button-secondary" onAction="#refundSelectedPurchase"/>
                     </HBox>
+                </VBox>
+
+                <VBox styleClass="card" spacing="14">
+                    <Label text="Detail de l'achat" styleClass="section-title"/>
+                    <Label text="Selectionne une ligne dans les achats pour voir le detail complet et son historique." styleClass="section-subtitle" wrapText="true"/>
+
+                    <FlowPane hgap="18" vgap="10">
+                        <VBox spacing="4">
+                            <Label text="Utilisateur" styleClass="stat-title"/>
+                            <Label fx:id="detailUsernameLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Evenement" styleClass="stat-title"/>
+                            <Label fx:id="detailEventLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Billet" styleClass="stat-title"/>
+                            <Label fx:id="detailTicketNumberLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Statut" styleClass="stat-title"/>
+                            <Label fx:id="detailStatusLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Sieges" styleClass="stat-title"/>
+                            <Label fx:id="detailSeatsLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Total" styleClass="stat-title"/>
+                            <Label fx:id="detailTotalLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Date achat" styleClass="stat-title"/>
+                            <Label fx:id="detailPurchaseDateLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Date remboursement" styleClass="stat-title"/>
+                            <Label fx:id="detailRefundDateLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                    </FlowPane>
+
+                    <VBox spacing="4">
+                        <Label text="PDF" styleClass="stat-title"/>
+                        <Label fx:id="detailPdfLabel" text="-" styleClass="section-subtitle" wrapText="true"/>
+                    </VBox>
+
+                    <TableView fx:id="purchaseAuditTable" prefHeight="180" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colPurchaseLogDate" text="Date" prefWidth="160"/>
+                            <TableColumn fx:id="colPurchaseLogType" text="Type" prefWidth="120"/>
+                            <TableColumn fx:id="colPurchaseLogDetails" text="Details" prefWidth="520"/>
+                        </columns>
+                    </TableView>
                 </VBox>
 
                 <VBox styleClass="card" spacing="14">

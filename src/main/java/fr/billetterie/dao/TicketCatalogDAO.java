@@ -406,14 +406,16 @@ public class TicketCatalogDAO {
                     p.total,
                     p.purchase_date,
                     tf.ticket_number,
+                    tf.pdf_path,
                     NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), '') AS seat_labels,
-                    COALESCE(p.status, 'CONFIRMED') AS purchase_status
+                    COALESCE(p.status, 'CONFIRMED') AS purchase_status,
+                    p.refunded_at
                 FROM purchases p
                 JOIN users u ON u.id = p.user_id
                 JOIN tickets t ON t.id = p.ticket_id
                 LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
                 LEFT JOIN purchase_seats ps ON ps.purchase_id = p.id
-                GROUP BY p.id, p.user_id, u.username, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, p.status
+                GROUP BY p.id, p.user_id, u.username, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, tf.pdf_path, p.status, p.refunded_at
                 ORDER BY p.purchase_date DESC
                 """;
 
@@ -432,8 +434,10 @@ public class TicketCatalogDAO {
                             rs.getBigDecimal("total"),
                             rs.getString("seat_labels"),
                             rs.getString("ticket_number"),
+                            rs.getString("pdf_path"),
                             rs.getTimestamp("purchase_date").toLocalDateTime(),
-                            rs.getString("purchase_status")
+                            rs.getString("purchase_status"),
+                            rs.getTimestamp("refunded_at") != null ? rs.getTimestamp("refunded_at").toLocalDateTime() : null
                     ));
                 }
             }
@@ -493,6 +497,54 @@ public class TicketCatalogDAO {
         return events;
     }
 
+    public static List<TicketEventLog> getTicketEventsForPurchase(int purchaseId) {
+        List<TicketEventLog> events = new ArrayList<>();
+        String sql = """
+                SELECT
+                    te.id,
+                    te.purchase_id,
+                    u.username,
+                    t.event_name,
+                    tf.ticket_number,
+                    te.event_type,
+                    te.details,
+                    te.created_at
+                FROM ticket_events te
+                JOIN purchases p ON p.id = te.purchase_id
+                JOIN users u ON u.id = p.user_id
+                JOIN tickets t ON t.id = p.ticket_id
+                LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
+                WHERE te.purchase_id = ?
+                ORDER BY te.created_at DESC, te.id DESC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setInt(1, purchaseId);
+                try (ResultSet rs = pst.executeQuery()) {
+                    while (rs.next()) {
+                        events.add(new TicketEventLog(
+                                rs.getInt("id"),
+                                rs.getInt("purchase_id"),
+                                rs.getString("username"),
+                                rs.getString("event_name"),
+                                rs.getString("ticket_number"),
+                                rs.getString("event_type"),
+                                rs.getString("details"),
+                                rs.getTimestamp("created_at").toLocalDateTime()
+                        ));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getTicketEventsForPurchase()");
+            e.printStackTrace();
+        }
+
+        return events;
+    }
+
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {
         return cancelPurchase(purchaseId, null);
     }
@@ -514,7 +566,7 @@ public class TicketCatalogDAO {
                 SET s.is_taken = 0
                 WHERE s.ticket_id = ?
                 """;
-        String cancelSql = "UPDATE purchases SET status = 'CANCELLED' WHERE id = ?";
+        String cancelSql = "UPDATE purchases SET status = 'CANCELLED', refunded_at = NULL WHERE id = ?";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -542,6 +594,10 @@ public class TicketCatalogDAO {
                 if ("CANCELLED".equalsIgnoreCase(status)) {
                     conn.rollback();
                     return PurchaseOperationResult.failure("Cet achat est deja annule.");
+                }
+                if ("REFUNDED".equalsIgnoreCase(status)) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Cet achat est deja rembourse.");
                 }
 
                 try (PreparedStatement pst = conn.prepareStatement(restockSql)) {
@@ -578,6 +634,96 @@ public class TicketCatalogDAO {
             System.out.println("Erreur cancelPurchase()");
             e.printStackTrace();
             return PurchaseOperationResult.failure("Erreur lors de l'annulation de l'achat.");
+        }
+    }
+
+    public static PurchaseOperationResult refundPurchase(int purchaseId, String reason) {
+        String selectSql = """
+                SELECT p.ticket_id, p.quantity, p.total, COALESCE(p.status, 'CONFIRMED') AS purchase_status, t.event_name
+                FROM purchases p
+                JOIN tickets t ON t.id = p.ticket_id
+                WHERE p.id = ?
+                FOR UPDATE
+                """;
+        String restockSql = "UPDATE tickets SET stock = stock + ? WHERE id = ?";
+        String releaseSeatsSql = """
+                UPDATE seats s
+                JOIN purchase_seats ps
+                  ON ps.purchase_id = ?
+                 AND ps.seat_label = CONCAT(s.seat_row, s.seat_number)
+                SET s.is_taken = 0
+                WHERE s.ticket_id = ?
+                """;
+        String refundSql = "UPDATE purchases SET status = 'REFUNDED', refunded_at = NOW() WHERE id = ?";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                ensurePurchaseArtifactsSchema(conn);
+                int ticketId;
+                int quantity;
+                BigDecimal total;
+                String status;
+                String eventName;
+
+                try (PreparedStatement pst = conn.prepareStatement(selectSql)) {
+                    pst.setInt(1, purchaseId);
+                    try (ResultSet rs = pst.executeQuery()) {
+                        if (!rs.next()) {
+                            conn.rollback();
+                            return PurchaseOperationResult.failure("Achat introuvable.");
+                        }
+                        ticketId = rs.getInt("ticket_id");
+                        quantity = rs.getInt("quantity");
+                        total = rs.getBigDecimal("total");
+                        status = rs.getString("purchase_status");
+                        eventName = rs.getString("event_name");
+                    }
+                }
+
+                if ("REFUNDED".equalsIgnoreCase(status)) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Cet achat est deja rembourse.");
+                }
+                if ("CANCELLED".equalsIgnoreCase(status)) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Un achat annule n'est pas remboursable ici.");
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(restockSql)) {
+                    pst.setInt(1, quantity);
+                    pst.setInt(2, ticketId);
+                    pst.executeUpdate();
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(releaseSeatsSql)) {
+                    pst.setInt(1, purchaseId);
+                    pst.setInt(2, ticketId);
+                    pst.executeUpdate();
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(refundSql)) {
+                    pst.setInt(1, purchaseId);
+                    pst.executeUpdate();
+                }
+
+                String details = "Achat rembourse pour " + eventName + " | montant: " + total + " EUR";
+                if (reason != null && !reason.isBlank()) {
+                    details += " | motif: " + reason.trim();
+                }
+                logTicketEvent(conn, purchaseId, "REFUNDED", details);
+                conn.commit();
+                return PurchaseOperationResult.success("Achat rembourse et stock remis a jour.", purchaseId);
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur refundPurchase()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Erreur lors du remboursement de l'achat.");
         }
     }
 
@@ -645,6 +791,10 @@ public class TicketCatalogDAO {
         return countPurchaseByStatus("CANCELLED");
     }
 
+    public static int countRefundedPurchases() {
+        return countPurchaseByStatus("REFUNDED");
+    }
+
     private static Ticket mapTicket(ResultSet rs) throws SQLException {
         return new Ticket(
                 rs.getInt("id"),
@@ -660,6 +810,10 @@ public class TicketCatalogDAO {
             st.executeUpdate("""
                     ALTER TABLE purchases
                     ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED'
+                    """);
+            st.executeUpdate("""
+                    ALTER TABLE purchases
+                    ADD COLUMN IF NOT EXISTS refunded_at DATETIME NULL
                     """);
             st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS ticket_files (

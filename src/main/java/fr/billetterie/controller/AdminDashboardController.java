@@ -35,6 +35,7 @@ public class AdminDashboardController {
     @FXML private Label ticketsCountLabel;
     @FXML private Label purchasesCountLabel;
     @FXML private Label cancelledCountLabel;
+    @FXML private Label refundedCountLabel;
     @FXML private Label expiredCleanupLabel;
 
     @FXML private TableView<Ticket> eventsTable;
@@ -53,6 +54,21 @@ public class AdminDashboardController {
     @FXML private Button purchasesFilterAllButton;
     @FXML private Button purchasesFilterConfirmedButton;
     @FXML private Button purchasesFilterCancelledButton;
+    @FXML private Button purchasesFilterRefundedButton;
+
+    @FXML private Label detailUsernameLabel;
+    @FXML private Label detailEventLabel;
+    @FXML private Label detailTicketNumberLabel;
+    @FXML private Label detailStatusLabel;
+    @FXML private Label detailSeatsLabel;
+    @FXML private Label detailTotalLabel;
+    @FXML private Label detailPurchaseDateLabel;
+    @FXML private Label detailRefundDateLabel;
+    @FXML private Label detailPdfLabel;
+    @FXML private TableView<TicketEventLog> purchaseAuditTable;
+    @FXML private TableColumn<TicketEventLog, String> colPurchaseLogDate;
+    @FXML private TableColumn<TicketEventLog, String> colPurchaseLogType;
+    @FXML private TableColumn<TicketEventLog, String> colPurchaseLogDetails;
 
     @FXML private TableView<TicketEventLog> eventsLogTable;
     @FXML private TableColumn<TicketEventLog, String> colLogDate;
@@ -77,6 +93,7 @@ public class AdminDashboardController {
         configureEventTable();
         configurePurchasesTable();
         configureAuditTable();
+        configurePurchaseAuditTable();
         refreshAdminView();
     }
 
@@ -155,6 +172,34 @@ public class AdminDashboardController {
     }
 
     @FXML
+    public void refundSelectedPurchase() {
+        if (selectedPurchaseId == 0) {
+            showResult(false, "Selectionne un achat dans le tableau.");
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Motif de remboursement");
+        dialog.setHeaderText("Remboursement admin");
+        dialog.setContentText("Motif :");
+
+        Optional<String> reason = dialog.showAndWait();
+        if (reason.isEmpty()) {
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.refundPurchase(selectedPurchaseId, reason.get());
+        showResult(result.success(), result.message());
+        if (result.success()) {
+            selectedPurchaseId = 0;
+            if (purchasesTable != null) {
+                purchasesTable.getSelectionModel().clearSelection();
+            }
+            refreshAdminView();
+        }
+    }
+
+    @FXML
     public void resetForm() {
         selectedTicketId = 0;
         eventNameField.clear();
@@ -195,6 +240,12 @@ public class AdminDashboardController {
         refreshPurchases();
     }
 
+    @FXML
+    public void showRefundedPurchases() {
+        purchaseFilterMode = "refunded";
+        refreshPurchases();
+    }
+
     private void refreshAdminView() {
         int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
 
@@ -202,6 +253,7 @@ public class AdminDashboardController {
         ticketsCountLabel.setText(String.valueOf(TicketCatalogDAO.countTickets()));
         purchasesCountLabel.setText(String.valueOf(TicketCatalogDAO.countConfirmedPurchases()));
         cancelledCountLabel.setText(String.valueOf(TicketCatalogDAO.countCancelledPurchases()));
+        refundedCountLabel.setText(String.valueOf(TicketCatalogDAO.countRefundedPurchases()));
         expiredCleanupLabel.setText(String.valueOf(deletedExpired));
 
         refreshEvents();
@@ -237,6 +289,7 @@ public class AdminDashboardController {
 
         purchasesTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             selectedPurchaseId = newValue != null ? newValue.purchaseId() : 0;
+            showPurchaseDetails(newValue);
         });
     }
 
@@ -249,6 +302,12 @@ public class AdminDashboardController {
         colLogDetails.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().details() != null ? cell.getValue().details() : "-"));
     }
 
+    private void configurePurchaseAuditTable() {
+        colPurchaseLogDate.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().createdAt())));
+        colPurchaseLogType.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventType()));
+        colPurchaseLogDetails.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().details() != null ? cell.getValue().details() : "-"));
+    }
+
     private void refreshEvents() {
         List<Ticket> tickets = TicketCatalogDAO.getAllTickets();
         eventsTable.setItems(FXCollections.observableArrayList(tickets));
@@ -259,6 +318,7 @@ public class AdminDashboardController {
                 .filter(purchase -> switch (purchaseFilterMode) {
                     case "confirmed" -> "CONFIRMED".equalsIgnoreCase(purchase.status());
                     case "cancelled" -> "CANCELLED".equalsIgnoreCase(purchase.status());
+                    case "refunded" -> "REFUNDED".equalsIgnoreCase(purchase.status());
                     default -> true;
                 })
                 .toList();
@@ -281,6 +341,7 @@ public class AdminDashboardController {
         updateFilterButton(purchasesFilterAllButton, "all".equals(purchaseFilterMode));
         updateFilterButton(purchasesFilterConfirmedButton, "confirmed".equals(purchaseFilterMode));
         updateFilterButton(purchasesFilterCancelledButton, "cancelled".equals(purchaseFilterMode));
+        updateFilterButton(purchasesFilterRefundedButton, "refunded".equals(purchaseFilterMode));
     }
 
     private void updateFilterButton(Button button, boolean active) {
@@ -289,5 +350,32 @@ public class AdminDashboardController {
         }
         button.getStyleClass().removeAll("catalog-chip", "catalog-chip-active");
         button.getStyleClass().add(active ? "catalog-chip-active" : "catalog-chip");
+    }
+
+    private void showPurchaseDetails(AdminPurchaseRecord purchase) {
+        if (purchase == null) {
+            detailUsernameLabel.setText("-");
+            detailEventLabel.setText("-");
+            detailTicketNumberLabel.setText("-");
+            detailStatusLabel.setText("-");
+            detailSeatsLabel.setText("-");
+            detailTotalLabel.setText("-");
+            detailPurchaseDateLabel.setText("-");
+            detailRefundDateLabel.setText("-");
+            detailPdfLabel.setText("-");
+            purchaseAuditTable.setItems(FXCollections.observableArrayList());
+            return;
+        }
+
+        detailUsernameLabel.setText(purchase.username());
+        detailEventLabel.setText(purchase.eventName());
+        detailTicketNumberLabel.setText(purchase.ticketNumber() != null ? purchase.ticketNumber() : "-");
+        detailStatusLabel.setText(purchase.status());
+        detailSeatsLabel.setText(purchase.seatLabels() != null && !purchase.seatLabels().isBlank() ? purchase.seatLabels() : "Attribution libre");
+        detailTotalLabel.setText(purchase.total() + " EUR");
+        detailPurchaseDateLabel.setText(DATE_FORMAT.format(purchase.purchaseDate()));
+        detailRefundDateLabel.setText(purchase.refundedAt() != null ? DATE_FORMAT.format(purchase.refundedAt()) : "-");
+        detailPdfLabel.setText(purchase.pdfPath() != null && !purchase.pdfPath().isBlank() ? purchase.pdfPath() : "-");
+        purchaseAuditTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getTicketEventsForPurchase(purchase.purchaseId())));
     }
 }
