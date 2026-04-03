@@ -139,6 +139,42 @@
                 </VBox>
 
                 <VBox styleClass="card" spacing="14">
+                    <Label text="Occupation de la salle" styleClass="section-title"/>
+                    <Label text="Lecture operationnelle des places prises et libres, par spectacle puis par rangee." styleClass="section-subtitle" wrapText="true"/>
+
+                    <HBox spacing="18">
+                        <VBox spacing="6">
+                            <Label text="Synthese" styleClass="stat-title"/>
+                            <Label fx:id="occupancySummaryLabel" text="Total: 0 | Pris: 0 | Libres: 0" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="6">
+                            <Label text="Spectacle detaille" styleClass="stat-title"/>
+                            <Label fx:id="occupancySelectedEventLabel" text="-" styleClass="section-subtitle" wrapText="true"/>
+                        </VBox>
+                    </HBox>
+
+                    <TableView fx:id="occupancyTable" prefHeight="220" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colOccupancyEvent" text="Spectacle" prefWidth="280"/>
+                            <TableColumn fx:id="colOccupancyTotal" text="Total" prefWidth="90"/>
+                            <TableColumn fx:id="colOccupancyTaken" text="Pris" prefWidth="90"/>
+                            <TableColumn fx:id="colOccupancyAvailable" text="Libres" prefWidth="90"/>
+                            <TableColumn fx:id="colOccupancyRate" text="Occupation" prefWidth="120"/>
+                        </columns>
+                    </TableView>
+
+                    <TableView fx:id="rowOccupancyTable" prefHeight="200" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colRowLabel" text="Rangee" prefWidth="120"/>
+                            <TableColumn fx:id="colRowTotal" text="Total" prefWidth="90"/>
+                            <TableColumn fx:id="colRowTaken" text="Pris" prefWidth="90"/>
+                            <TableColumn fx:id="colRowAvailable" text="Libres" prefWidth="90"/>
+                            <TableColumn fx:id="colRowRate" text="Occupation" prefWidth="120"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+
+                <VBox styleClass="card" spacing="14">
                     <Label text="Gestion des evenements" styleClass="section-title"/>
                     <Label text="Selectionne une ligne pour modifier un evenement existant, ou remplis le formulaire pour en creer un nouveau." styleClass="section-subtitle" wrapText="true"/>
 

@@ -4,8 +4,10 @@ import fr.billetterie.App;
 import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.dao.TicketCatalogDAO;
 import fr.billetterie.model.AdminPurchaseRecord;
+import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
+import fr.billetterie.model.AdminSeatOccupancyStat;
 import fr.billetterie.model.Ticket;
 import fr.billetterie.model.TicketEventLog;
 import fr.billetterie.repository.DaoTicketAdminRepository;
@@ -59,6 +61,20 @@ public class AdminDashboardController {
     @FXML private TableColumn<Ticket, String> colEventDate;
     @FXML private TableColumn<Ticket, String> colEventPrice;
     @FXML private TableColumn<Ticket, Integer> colEventStock;
+    @FXML private Label occupancySelectedEventLabel;
+    @FXML private Label occupancySummaryLabel;
+    @FXML private TableView<AdminSeatOccupancyStat> occupancyTable;
+    @FXML private TableColumn<AdminSeatOccupancyStat, String> colOccupancyEvent;
+    @FXML private TableColumn<AdminSeatOccupancyStat, Integer> colOccupancyTotal;
+    @FXML private TableColumn<AdminSeatOccupancyStat, Integer> colOccupancyTaken;
+    @FXML private TableColumn<AdminSeatOccupancyStat, Integer> colOccupancyAvailable;
+    @FXML private TableColumn<AdminSeatOccupancyStat, String> colOccupancyRate;
+    @FXML private TableView<AdminRowOccupancyStat> rowOccupancyTable;
+    @FXML private TableColumn<AdminRowOccupancyStat, String> colRowLabel;
+    @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowTotal;
+    @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowTaken;
+    @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowAvailable;
+    @FXML private TableColumn<AdminRowOccupancyStat, String> colRowRate;
 
     @FXML private TableView<AdminPurchaseRecord> purchasesTable;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseUser;
@@ -146,6 +162,7 @@ public class AdminDashboardController {
     @FXML
     public void initialize() {
         configureEventTable();
+        configureOccupancyTables();
         configurePurchasesTable();
         configureAuditTable();
         configurePurchaseAuditTable();
@@ -553,6 +570,7 @@ public class AdminDashboardController {
         refreshPurchases();
         refreshAudit();
         refreshSalesStats();
+        refreshOccupancy();
     }
 
     private void configureEventTable() {
@@ -570,7 +588,31 @@ public class AdminDashboardController {
             eventDateField.setText(DATE_FORMAT.format(newValue.eventDate()));
             eventPriceField.setText(newValue.price().toPlainString());
             eventStockField.setText(String.valueOf(newValue.stock()));
+            refreshRowOccupancy(newValue.id(), newValue.eventName());
         });
+    }
+
+    private void configureOccupancyTables() {
+        if (occupancyTable != null) {
+            colOccupancyEvent.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+            colOccupancyTotal.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().totalSeats()));
+            colOccupancyTaken.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().takenSeats()));
+            colOccupancyAvailable.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().availableSeats()));
+            colOccupancyRate.setCellValueFactory(cell -> new SimpleStringProperty(formatPercent(cell.getValue().occupancyRate())));
+            occupancyTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+                if (newValue != null) {
+                    refreshRowOccupancy(newValue.ticketId(), newValue.eventName());
+                }
+            });
+        }
+
+        if (rowOccupancyTable != null) {
+            colRowLabel.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().rowLabel()));
+            colRowTotal.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().totalSeats()));
+            colRowTaken.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().takenSeats()));
+            colRowAvailable.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().availableSeats()));
+            colRowRate.setCellValueFactory(cell -> new SimpleStringProperty(formatPercent(cell.getValue().occupancyRate())));
+        }
     }
 
     private void configurePurchasesTable() {
@@ -652,6 +694,46 @@ public class AdminDashboardController {
         salesStatsTable.setItems(FXCollections.observableArrayList(stats));
         refreshSalesCharts(stats);
         updateSalesPeriodButtons();
+    }
+
+    private void refreshOccupancy() {
+        if (occupancyTable == null) {
+            return;
+        }
+        List<AdminSeatOccupancyStat> stats = TicketCatalogDAO.getSeatOccupancyStats();
+        occupancyTable.setItems(FXCollections.observableArrayList(stats));
+
+        int totalSeats = stats.stream().mapToInt(AdminSeatOccupancyStat::totalSeats).sum();
+        int takenSeats = stats.stream().mapToInt(AdminSeatOccupancyStat::takenSeats).sum();
+        int availableSeats = stats.stream().mapToInt(AdminSeatOccupancyStat::availableSeats).sum();
+        occupancySummaryLabel.setText("Total: " + totalSeats + " | Pris: " + takenSeats + " | Libres: " + availableSeats);
+
+        AdminSeatOccupancyStat selected = occupancyTable.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            refreshRowOccupancy(selected.ticketId(), selected.eventName());
+        } else if (!stats.isEmpty()) {
+            occupancyTable.getSelectionModel().selectFirst();
+            AdminSeatOccupancyStat first = occupancyTable.getSelectionModel().getSelectedItem();
+            if (first != null) {
+                refreshRowOccupancy(first.ticketId(), first.eventName());
+            }
+        } else {
+            refreshRowOccupancy(0, null);
+        }
+    }
+
+    private void refreshRowOccupancy(int ticketId, String eventName) {
+        if (rowOccupancyTable == null) {
+            return;
+        }
+        if (ticketId <= 0) {
+            rowOccupancyTable.setItems(FXCollections.observableArrayList());
+            occupancySelectedEventLabel.setText("-");
+            return;
+        }
+
+        occupancySelectedEventLabel.setText(eventName != null ? eventName : "-");
+        rowOccupancyTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getRowOccupancyStats(ticketId)));
     }
 
     private void showResult(boolean success, String message) {
@@ -787,6 +869,10 @@ public class AdminDashboardController {
             return value;
         }
         return value.substring(0, 18) + "...";
+    }
+
+    private String formatPercent(double value) {
+        return String.format(Locale.ROOT, "%.1f %%", value);
     }
 
     private boolean matchesPurchaseSearch(AdminPurchaseRecord purchase, String searchText) {

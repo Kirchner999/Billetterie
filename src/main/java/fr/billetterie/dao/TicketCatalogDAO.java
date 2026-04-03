@@ -1,8 +1,10 @@
 package fr.billetterie.dao;
 
 import fr.billetterie.model.AdminPurchaseRecord;
+import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
+import fr.billetterie.model.AdminSeatOccupancyStat;
 import fr.billetterie.model.Purchase;
 import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
@@ -679,6 +681,91 @@ public class TicketCatalogDAO {
         }
 
         return points;
+    }
+
+    public static List<AdminSeatOccupancyStat> getSeatOccupancyStats() {
+        List<AdminSeatOccupancyStat> stats = new ArrayList<>();
+        String sql = """
+                SELECT
+                    t.id,
+                    t.event_name,
+                    COUNT(s.id) AS total_seats,
+                    COALESCE(SUM(CASE WHEN s.is_taken = 1 THEN 1 ELSE 0 END), 0) AS taken_seats
+                FROM tickets t
+                LEFT JOIN seats s ON s.ticket_id = t.id
+                GROUP BY t.id, t.event_name
+                HAVING COUNT(s.id) > 0
+                ORDER BY
+                    CASE WHEN COUNT(s.id) = 0 THEN 0 ELSE SUM(CASE WHEN s.is_taken = 1 THEN 1 ELSE 0 END) / COUNT(s.id) END DESC,
+                    t.event_name ASC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql);
+                 ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    int totalSeats = rs.getInt("total_seats");
+                    int takenSeats = rs.getInt("taken_seats");
+                    int availableSeats = Math.max(0, totalSeats - takenSeats);
+                    double occupancyRate = totalSeats == 0 ? 0.0 : (takenSeats * 100.0) / totalSeats;
+                    stats.add(new AdminSeatOccupancyStat(
+                            rs.getInt("id"),
+                            rs.getString("event_name"),
+                            totalSeats,
+                            takenSeats,
+                            availableSeats,
+                            occupancyRate
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getSeatOccupancyStats()");
+            e.printStackTrace();
+        }
+
+        return stats;
+    }
+
+    public static List<AdminRowOccupancyStat> getRowOccupancyStats(int ticketId) {
+        List<AdminRowOccupancyStat> stats = new ArrayList<>();
+        String sql = """
+                SELECT
+                    seat_row,
+                    COUNT(id) AS total_seats,
+                    COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS taken_seats
+                FROM seats
+                WHERE ticket_id = ?
+                GROUP BY seat_row
+                ORDER BY seat_row ASC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setInt(1, ticketId);
+                try (ResultSet rs = pst.executeQuery()) {
+                    while (rs.next()) {
+                        int totalSeats = rs.getInt("total_seats");
+                        int takenSeats = rs.getInt("taken_seats");
+                        int availableSeats = Math.max(0, totalSeats - takenSeats);
+                        double occupancyRate = totalSeats == 0 ? 0.0 : (takenSeats * 100.0) / totalSeats;
+                        stats.add(new AdminRowOccupancyStat(
+                                rs.getString("seat_row"),
+                                totalSeats,
+                                takenSeats,
+                                availableSeats,
+                                occupancyRate
+                        ));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getRowOccupancyStats()");
+            e.printStackTrace();
+        }
+
+        return stats;
     }
 
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {
