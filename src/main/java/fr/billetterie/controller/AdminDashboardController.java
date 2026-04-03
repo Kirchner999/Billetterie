@@ -24,9 +24,12 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 
 import java.awt.Desktop;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -83,6 +86,7 @@ public class AdminDashboardController {
     @FXML private TableColumn<TicketEventLog, String> colLogEvent;
     @FXML private TableColumn<TicketEventLog, String> colLogTicket;
     @FXML private TableColumn<TicketEventLog, String> colLogDetails;
+    @FXML private TextField auditSearchField;
 
     @FXML private TextField eventNameField;
     @FXML private TextField eventDateField;
@@ -94,6 +98,7 @@ public class AdminDashboardController {
     private int selectedPurchaseId;
     private String purchaseFilterMode = "all";
     private String purchaseSearchText = "";
+    private String auditSearchText = "";
 
     @FXML
     public void initialize() {
@@ -273,6 +278,59 @@ public class AdminDashboardController {
         openPdfPath(Path.of(purchase.pdfPath()));
     }
 
+    @FXML
+    public void applyAuditSearch() {
+        auditSearchText = auditSearchField != null ? auditSearchField.getText() : "";
+        refreshAudit();
+    }
+
+    @FXML
+    public void exportPurchasesCsv() {
+        List<AdminPurchaseRecord> purchases = purchasesTable != null
+                ? new ArrayList<>(purchasesTable.getItems())
+                : List.of();
+
+        if (purchases.isEmpty()) {
+            showResult(false, "Aucun achat a exporter avec les filtres actuels.");
+            return;
+        }
+
+        try {
+            Path exportDir = Path.of("target", "exports");
+            Files.createDirectories(exportDir);
+            Path csvPath = exportDir.resolve("achats-admin-" + System.currentTimeMillis() + ".csv");
+
+            List<String> lines = new ArrayList<>();
+            lines.add("purchase_id;username;event_name;ticket_number;status;quantity;total;seat_labels;purchase_date;refunded_at;pdf_path");
+            for (AdminPurchaseRecord purchase : purchases) {
+                lines.add(String.join(";",
+                        csvValue(String.valueOf(purchase.purchaseId())),
+                        csvValue(purchase.username()),
+                        csvValue(purchase.eventName()),
+                        csvValue(purchase.ticketNumber()),
+                        csvValue(purchase.status()),
+                        csvValue(String.valueOf(purchase.quantity())),
+                        csvValue(purchase.total().toPlainString()),
+                        csvValue(purchase.seatLabels()),
+                        csvValue(DATE_FORMAT.format(purchase.purchaseDate())),
+                        csvValue(purchase.refundedAt() != null ? DATE_FORMAT.format(purchase.refundedAt()) : ""),
+                        csvValue(purchase.pdfPath())
+                ));
+            }
+
+            Files.write(csvPath, lines, StandardCharsets.UTF_8);
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                    "Export CSV cree.\nChemin: " + csvPath + "\nLignes: " + purchases.size());
+            Button openButton = new Button("Ouvrir le dossier");
+            openButton.setOnAction(event -> openPdfPath(csvPath.getParent()));
+            alert.getDialogPane().setExpandableContent(openButton);
+            alert.showAndWait();
+        } catch (IOException e) {
+            showResult(false, "Impossible de generer le fichier CSV.");
+        }
+    }
+
     private void refreshAdminView() {
         int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
 
@@ -321,6 +379,9 @@ public class AdminDashboardController {
         if (purchaseSearchField != null) {
             purchaseSearchField.setOnAction(event -> applyPurchaseSearch());
         }
+        if (auditSearchField != null) {
+            auditSearchField.setOnAction(event -> applyAuditSearch());
+        }
     }
 
     private void configureAuditTable() {
@@ -358,7 +419,9 @@ public class AdminDashboardController {
     }
 
     private void refreshAudit() {
-        List<TicketEventLog> logs = TicketCatalogDAO.getRecentTicketEvents(30);
+        List<TicketEventLog> logs = TicketCatalogDAO.getRecentTicketEvents(100).stream()
+                .filter(log -> matchesAuditSearch(log, auditSearchText))
+                .toList();
         eventsLogTable.setItems(FXCollections.observableArrayList(logs));
     }
 
@@ -428,6 +491,25 @@ public class AdminDashboardController {
 
     private boolean containsIgnoreCase(String value, String query) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(query);
+    }
+
+    private boolean matchesAuditSearch(TicketEventLog log, String searchText) {
+        if (searchText == null || searchText.isBlank()) {
+            return true;
+        }
+        String query = searchText.trim().toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(log.username(), query)
+                || containsIgnoreCase(log.eventName(), query)
+                || containsIgnoreCase(log.ticketNumber(), query)
+                || containsIgnoreCase(log.eventType(), query)
+                || containsIgnoreCase(log.details(), query);
+    }
+
+    private String csvValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace(";", ",").replace("\r", " ").replace("\n", " ");
     }
 
     private void openPdfPath(Path filePath) {

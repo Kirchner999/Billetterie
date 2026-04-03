@@ -137,6 +137,7 @@
                     <HBox spacing="12">
                         <Button text="Annuler l'achat selectionne" styleClass="button-secondary" onAction="#cancelSelectedPurchase"/>
                         <Button text="Rembourser l'achat selectionne" styleClass="button-secondary" onAction="#refundSelectedPurchase"/>
+                        <Button text="Exporter achats CSV" styleClass="button-secondary" onAction="#exportPurchasesCsv"/>
                     </HBox>
                 </VBox>
 
@@ -200,6 +201,11 @@
                 <VBox styleClass="card" spacing="14">
                     <Label text="Journal des billets" styleClass="section-title"/>
                     <Label text="Audit recent de generation, regeneration, export et annulation." styleClass="section-subtitle" wrapText="true"/>
+
+                    <HBox spacing="10">
+                        <TextField fx:id="auditSearchField" promptText="Rechercher dans le journal des billets" HBox.hgrow="ALWAYS"/>
+                        <Button text="Chercher" onAction="#applyAuditSearch"/>
+                    </HBox>
 
                     <TableView fx:id="eventsLogTable" prefHeight="260" styleClass="data-table">
                         <columns>
