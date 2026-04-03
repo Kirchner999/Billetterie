@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.layout.*?>
 <?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
 <StackPane xmlns:fx="http://javafx.com/fxml"
            fx:controller="fr.billetterie.controller.RegisterController"
@@ -12,27 +12,26 @@
           spacing="20"
           maxWidth="350">
 
-        <Label text="Créer un compte" styleClass="title"/>
+        <Label text="Creer un compte" styleClass="title"/>
 
-        <!-- PSEUDO AJOUTÉ -->
         <TextField fx:id="pseudoField"
-                   promptText="Pseudo"/>
+                   promptText="Nom d'utilisateur"/>
 
         <TextField fx:id="nomField"
-                   promptText="Nom complet"/>
+                   promptText="Nom complet (optionnel)"/>
 
         <TextField fx:id="emailField"
-                   promptText="Email"/>
+                   promptText="Email (optionnel)"/>
 
         <PasswordField fx:id="passwordField"
                        promptText="Mot de passe"/>
 
         <Button text="S'inscrire" onAction="#handleRegister"/>
 
-        <Hyperlink text="Déjà un compte ? Se connecter"
+        <Hyperlink text="Deja un compte ? Se connecter"
                    onAction="#goToLogin"/>
 
-        <Button text="Changer thème"
+        <Button text="Changer theme"
                 styleClass="button-secondary"
                 onAction="#switchTheme"/>
 

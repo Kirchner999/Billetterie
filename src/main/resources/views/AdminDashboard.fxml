@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.layout.*?>
-<?import javafx.scene.control.*?>
 <?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="fr.billetterie.controller.AdminDashboardController">
 
-    <!-- SIDEBAR -->
     <left>
         <VBox styleClass="sidebar" spacing="25" prefWidth="220">
             <padding>
@@ -15,17 +18,11 @@
             </padding>
 
             <Label text="Admin Panel" styleClass="title"/>
-
-            <Button text="Gestion Spectacles"/>
-            <Button text="Gestion Représentations"/>
-            <Button text="Gestion Utilisateurs"/>
-            <Button text="Billets vendus"/>
-            <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
-            <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
+            <Button text="Changer theme" styleClass="button-secondary" onAction="#switchTheme"/>
+            <Button text="Deconnexion" styleClass="button-secondary" onAction="#logout"/>
         </VBox>
     </left>
 
-    <!-- CONTENT -->
     <center>
         <ScrollPane fitToWidth="true">
             <FlowPane alignment="CENTER" hgap="25" vgap="25">
@@ -35,21 +32,21 @@
 
                 <VBox styleClass="card" alignment="CENTER" spacing="10">
                     <Label text="Utilisateurs" styleClass="title"/>
-                    <Label text="Section administration complète"/>
+                    <Label fx:id="usersCountLabel" text="Utilisateurs: 0"/>
                 </VBox>
 
                 <VBox styleClass="card" alignment="CENTER" spacing="10">
-                    <Label text="Spectacles" styleClass="title"/>
-                    <Label text="Créer / modifier / supprimer"/>
+                    <Label text="Evenements" styleClass="title"/>
+                    <Label fx:id="ticketsCountLabel" text="Evenements: 0"/>
                 </VBox>
 
                 <VBox styleClass="card" alignment="CENTER" spacing="10">
-                    <Label text="Statistiques" styleClass="title"/>
-                    <Label text="Graphiques & ventes"/>
+                    <Label text="Achats" styleClass="title"/>
+                    <Label fx:id="purchasesCountLabel" text="Achats: 0"/>
                 </VBox>
-
             </FlowPane>
         </ScrollPane>
     </center>
 
 </BorderPane>
+

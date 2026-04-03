@@ -11,15 +11,15 @@ public class AuthService {
         this.clientRepository = clientRepository;
     }
 
-    public LoginResult login(String email, String password) {
-        String normalizedEmail = normalize(email);
+    public LoginResult login(String username, String password) {
+        String normalizedUsername = normalize(username);
         String normalizedPassword = normalize(password);
 
-        if (normalizedEmail.isEmpty() || normalizedPassword.isEmpty()) {
+        if (normalizedUsername.isEmpty() || normalizedPassword.isEmpty()) {
             return LoginResult.failure("Veuillez remplir tous les champs.");
         }
 
-        Client user = clientRepository.authenticate(normalizedEmail, normalizedPassword);
+        Client user = clientRepository.authenticate(normalizedUsername, normalizedPassword);
         if (user == null) {
             return LoginResult.failure("Identifiants incorrects !");
         }
@@ -28,11 +28,7 @@ public class AuthService {
     }
 
     static String resolveTargetView(Client user) {
-        return switch (user.getRole()) {
-            case "ADMIN" -> "AdminDashboard.fxml";
-            case "EDITEUR" -> "EditeurDashboard.fxml";
-            default -> "ClientDashboard.fxml";
-        };
+        return user.isAdmin() ? "AdminDashboard.fxml" : "ClientDashboard.fxml";
     }
 
     private String normalize(String value) {

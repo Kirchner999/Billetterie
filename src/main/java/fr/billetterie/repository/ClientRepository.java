@@ -6,9 +6,9 @@ import java.util.List;
 
 public interface ClientRepository {
 
-    Client authenticate(String email, String password);
+    Client authenticate(String username, String password);
 
-    boolean emailExists(String email);
+    boolean usernameExists(String username);
 
     boolean register(Client client);
 

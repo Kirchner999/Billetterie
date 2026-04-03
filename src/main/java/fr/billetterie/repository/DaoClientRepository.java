@@ -8,13 +8,13 @@ import java.util.List;
 public class DaoClientRepository implements ClientRepository {
 
     @Override
-    public Client authenticate(String email, String password) {
-        return ClientDAO.authenticate(email, password);
+    public Client authenticate(String username, String password) {
+        return ClientDAO.authenticate(username, password);
     }
 
     @Override
-    public boolean emailExists(String email) {
-        return ClientDAO.emailExists(email);
+    public boolean usernameExists(String username) {
+        return ClientDAO.usernameExists(username);
     }
 
     @Override

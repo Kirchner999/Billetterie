@@ -11,41 +11,27 @@ public class RegistrationService {
         this.clientRepository = clientRepository;
     }
 
-    public RegistrationResult register(String pseudo, String nom, String email, String password) {
-        String normalizedPseudo = normalize(pseudo);
-        String normalizedNom = normalize(nom);
-        String normalizedEmail = normalize(email);
+    public RegistrationResult register(String username, String ignoredFullName, String ignoredEmail, String password) {
+        String normalizedUsername = normalize(username);
         String normalizedPassword = normalize(password);
 
-        if (normalizedPseudo.isEmpty() || normalizedNom.isEmpty() || normalizedEmail.isEmpty() || normalizedPassword.isEmpty()) {
-            return RegistrationResult.failure("Veuillez remplir tous les champs.");
+        if (normalizedUsername.isEmpty() || normalizedPassword.isEmpty()) {
+            return RegistrationResult.failure("Veuillez remplir les champs obligatoires.");
         }
 
-        if (!normalizedEmail.contains("@")) {
-            return RegistrationResult.failure("Adresse email invalide.");
+        if (normalizedUsername.length() < 3) {
+            return RegistrationResult.failure("Le nom d'utilisateur doit contenir au moins 3 caracteres.");
         }
 
         if (normalizedPassword.length() < 6) {
             return RegistrationResult.failure("Le mot de passe doit contenir au moins 6 caracteres.");
         }
 
-        if (clientRepository.emailExists(normalizedEmail)) {
-            return RegistrationResult.failure("Cet email est deja utilise !");
+        if (clientRepository.usernameExists(normalizedUsername)) {
+            return RegistrationResult.failure("Ce nom d'utilisateur est deja utilise !");
         }
 
-        Client client = new Client(
-                0,
-                normalizedPseudo,
-                normalizedNom,
-                "",
-                "",
-                normalizedEmail,
-                normalizedPassword,
-                "",
-                false,
-                "CLIENT"
-        );
-
+        Client client = new Client(0, normalizedUsername, normalizedPassword, "user");
         if (!clientRepository.register(client)) {
             return RegistrationResult.failure("Erreur lors de l'inscription.");
         }

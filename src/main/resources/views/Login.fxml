@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.layout.*?>
-<?import javafx.scene.control.*?>
 <?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
 <StackPane xmlns:fx="http://javafx.com/fxml"
            fx:controller="fr.billetterie.controller.LoginController"
@@ -16,7 +16,7 @@
         <Label text="Connexion" styleClass="title"/>
 
         <TextField fx:id="emailField"
-                   promptText="Email"/>
+                   promptText="Nom d'utilisateur"/>
 
         <PasswordField fx:id="passwordField"
                        promptText="Mot de passe"/>
@@ -25,10 +25,10 @@
 
         <Button text="Se connecter" onAction="#handleLogin"/>
 
-        <Hyperlink text="Créer un compte"
+        <Hyperlink text="Creer un compte"
                    onAction="#goToRegister"/>
 
-        <Button text="Changer thème"
+        <Button text="Changer theme"
                 styleClass="button-secondary"
                 onAction="#switchTheme"/>
     </VBox>

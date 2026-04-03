@@ -13,51 +13,51 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RegistrationServiceTest {
 
     @Test
-    void registrationFailsWhenEmailAlreadyExists() {
+    void registrationFailsWhenUsernameAlreadyExists() {
         StubClientRepository repository = new StubClientRepository();
-        repository.emailExists = true;
+        repository.usernameExists = true;
         RegistrationService service = new RegistrationService(repository);
 
-        RegistrationResult result = service.register("alice", "Alice", "alice@test.fr", "secret1");
+        RegistrationResult result = service.register("alice", "", "", "secret1");
 
         assertFalse(result.success());
-        assertEquals("Cet email est deja utilise !", result.message());
+        assertEquals("Ce nom d'utilisateur est deja utilise !", result.message());
     }
 
     @Test
     void registrationFailsWhenPasswordIsTooShort() {
         RegistrationService service = new RegistrationService(new StubClientRepository());
 
-        RegistrationResult result = service.register("alice", "Alice", "alice@test.fr", "123");
+        RegistrationResult result = service.register("alice", "", "", "123");
 
         assertFalse(result.success());
         assertEquals("Le mot de passe doit contenir au moins 6 caracteres.", result.message());
     }
 
     @Test
-    void registrationCreatesDefaultClientRole() {
+    void registrationCreatesDefaultUserRole() {
         StubClientRepository repository = new StubClientRepository();
         RegistrationService service = new RegistrationService(repository);
 
-        RegistrationResult result = service.register("alice", "Alice", "alice@test.fr", "secret1");
+        RegistrationResult result = service.register("alice", "", "", "secret1");
 
         assertTrue(result.success());
-        assertEquals("CLIENT", repository.savedClient.getRole());
-        assertEquals("alice", repository.savedClient.getPseudo());
+        assertEquals("user", repository.savedClient.getRole());
+        assertEquals("alice", repository.savedClient.getUsername());
     }
 
     private static final class StubClientRepository implements ClientRepository {
-        private boolean emailExists;
+        private boolean usernameExists;
         private Client savedClient;
 
         @Override
-        public Client authenticate(String email, String password) {
+        public Client authenticate(String username, String password) {
             return null;
         }
 
         @Override
-        public boolean emailExists(String email) {
-            return emailExists;
+        public boolean usernameExists(String username) {
+            return usernameExists;
         }
 
         @Override

@@ -25,22 +25,22 @@ class AuthServiceTest {
     @Test
     void loginReturnsAdminDashboardForAdmin() {
         StubClientRepository repository = new StubClientRepository();
-        repository.authenticatedClient = new Client(1, "admin", "Admin", "", "", "admin@test.fr", "secret", "", true, "ADMIN");
+        repository.authenticatedClient = new Client(1, "admin", "secret", "admin");
         AuthService service = new AuthService(repository);
 
-        LoginResult result = service.login("admin@test.fr", "secret");
+        LoginResult result = service.login("admin", "secret");
 
         assertTrue(result.success());
         assertEquals("AdminDashboard.fxml", result.targetView());
     }
 
     @Test
-    void loginReturnsClientDashboardForClient() {
+    void loginReturnsClientDashboardForUser() {
         StubClientRepository repository = new StubClientRepository();
-        repository.authenticatedClient = new Client(2, "user", "User", "", "", "user@test.fr", "secret", "", false, "CLIENT");
+        repository.authenticatedClient = new Client(2, "user", "secret", "user");
         AuthService service = new AuthService(repository);
 
-        LoginResult result = service.login("user@test.fr", "secret");
+        LoginResult result = service.login("user", "secret");
 
         assertTrue(result.success());
         assertEquals("ClientDashboard.fxml", result.targetView());
@@ -50,12 +50,12 @@ class AuthServiceTest {
         private Client authenticatedClient;
 
         @Override
-        public Client authenticate(String email, String password) {
+        public Client authenticate(String username, String password) {
             return authenticatedClient;
         }
 
         @Override
-        public boolean emailExists(String email) {
+        public boolean usernameExists(String username) {
             return false;
         }
 
