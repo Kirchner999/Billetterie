@@ -36,6 +36,11 @@ public class DaoTicketStoreRepository implements TicketStoreRepository {
     }
 
     @Override
+    public void logTicketEvent(int purchaseId, String eventType, String details) {
+        TicketCatalogDAO.logTicketEvent(purchaseId, eventType, details);
+    }
+
+    @Override
     public Optional<Ticket> findTicketById(int ticketId) {
         return TicketCatalogDAO.findTicketById(ticketId);
     }

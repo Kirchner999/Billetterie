@@ -597,7 +597,15 @@ public class ClientDashboardController {
                     ? null
                     : seats.stream().map(Seat::displayLabel).collect(Collectors.joining(", "));
             boolean saved = ticketStoreRepository.saveReceiptDocument(purchaseId, receipt.ticketNumber(), receipt.pdfPath().toString(), seatLabels);
-            return saved ? receipt : null;
+            if (saved) {
+                ticketStoreRepository.logTicketEvent(
+                        purchaseId,
+                        "GENERATED",
+                        "Billet genere: " + receipt.ticketNumber() + " | pdf=" + receipt.pdfPath()
+                );
+                return receipt;
+            }
+            return null;
         } catch (Exception e) {
             return null;
         }
@@ -621,6 +629,11 @@ public class ClientDashboardController {
                 showPurchaseFailure(PurchaseOperationResult.failure("Le PDF a ete regenere mais la base n'a pas pu etre mise a jour."));
                 return null;
             }
+            ticketStoreRepository.logTicketEvent(
+                    purchase.id(),
+                    "REGENERATED",
+                    "Billet regenere: " + receipt.ticketNumber() + " | pdf=" + receipt.pdfPath()
+            );
 
             if (refreshView) {
                 Alert alert = new Alert(Alert.AlertType.INFORMATION,
@@ -677,6 +690,13 @@ public class ClientDashboardController {
 
         try {
             Path archivePath = ticketArchiveService.createArchive(user.getUsername(), pdfPaths);
+            for (Purchase purchase : selectedPurchases) {
+                ticketStoreRepository.logTicketEvent(
+                        purchase.id(),
+                        "EXPORTED",
+                        "Billet exporte dans l'archive: " + archivePath
+                );
+            }
             Alert alert = new Alert(Alert.AlertType.INFORMATION,
                     "Archive creee: " + archivePath + "\nBillets inclus: " + pdfPaths.size() + "\nBillets regeneres: " + regenerated);
             ButtonType openButton = new ButtonType("Ouvrir l'archive");

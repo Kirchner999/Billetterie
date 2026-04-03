@@ -379,6 +379,26 @@ public class TicketCatalogDAO {
         }
     }
 
+    public static void logTicketEvent(int purchaseId, String eventType, String details) {
+        String sql = """
+                INSERT INTO ticket_events (purchase_id, event_type, details, created_at)
+                VALUES (?, ?, ?, NOW())
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setInt(1, purchaseId);
+                pst.setString(2, eventType);
+                pst.setString(3, details);
+                pst.executeUpdate();
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur logTicketEvent()");
+            e.printStackTrace();
+        }
+    }
+
     public static int cleanupExpiredTickets() {
         String expiredIdsSql = "SELECT id FROM tickets WHERE event_date < NOW()";
         String deletePurchasesSql = "DELETE FROM purchases WHERE ticket_id = ?";
@@ -466,6 +486,19 @@ public class TicketCatalogDAO {
                         purchase_id INT NOT NULL,
                         seat_label VARCHAR(30) NOT NULL,
                         CONSTRAINT fk_purchase_seats_purchase
+                            FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+                            ON DELETE CASCADE
+                    )
+                    """);
+            st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS ticket_events (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        purchase_id INT NOT NULL,
+                        event_type VARCHAR(40) NOT NULL,
+                        details VARCHAR(500) NULL,
+                        created_at DATETIME NOT NULL,
+                        INDEX idx_ticket_events_purchase (purchase_id),
+                        CONSTRAINT fk_ticket_events_purchase
                             FOREIGN KEY (purchase_id) REFERENCES purchases(id)
                             ON DELETE CASCADE
                     )

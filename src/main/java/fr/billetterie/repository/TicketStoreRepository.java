@@ -19,5 +19,7 @@ public interface TicketStoreRepository {
 
     boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels);
 
+    void logTicketEvent(int purchaseId, String eventType, String details);
+
     Optional<Ticket> findTicketById(int ticketId);
 }

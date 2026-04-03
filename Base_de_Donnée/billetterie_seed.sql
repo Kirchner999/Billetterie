@@ -1,9 +1,5 @@
 USE billetterie;
 
-ALTER TABLE purchases ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(120) NULL;
-ALTER TABLE purchases ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(500) NULL;
-ALTER TABLE purchases ADD COLUMN IF NOT EXISTS seat_labels VARCHAR(255) NULL;
-
 CREATE TABLE IF NOT EXISTS ticket_files (
     id INT AUTO_INCREMENT PRIMARY KEY,
     purchase_id INT NOT NULL,
@@ -21,6 +17,17 @@ CREATE TABLE IF NOT EXISTS purchase_seats (
     purchase_id INT NOT NULL,
     seat_label VARCHAR(30) NOT NULL,
     CONSTRAINT fk_purchase_seats_purchase
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ticket_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    purchase_id INT NOT NULL,
+    event_type VARCHAR(40) NOT NULL,
+    details VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_ticket_events_purchase
         FOREIGN KEY (purchase_id) REFERENCES purchases(id)
         ON DELETE CASCADE
 );
