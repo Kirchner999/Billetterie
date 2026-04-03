@@ -16,6 +16,7 @@ import fr.billetterie.utils.ThemeManager;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
@@ -23,6 +24,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -136,34 +138,58 @@ public class ClientDashboardController {
             return;
         }
 
-        List<Purchase> purchases = ticketStoreRepository.getPurchasesByUser(user.getId()).stream()
+        List<Purchase> allPurchases = ticketStoreRepository.getPurchasesByUser(user.getId()).stream()
                 .filter(purchase -> purchase.ticketNumber() != null && !purchase.ticketNumber().isBlank())
                 .toList();
 
         VBox page = createPageBox();
-        page.getChildren().add(buildSectionTitle("Mes billets PDF", purchases.size() + " billet(s) disponible(s)"));
+        page.getChildren().add(buildSectionTitle("Mes billets PDF", allPurchases.size() + " billet(s) disponible(s)"));
 
-        if (purchases.isEmpty()) {
+        if (allPurchases.isEmpty()) {
             page.getChildren().add(buildEmptyState("Aucun billet PDF enregistre pour le moment."));
             contentPane.getChildren().setAll(page);
             return;
         }
 
-        long existingCount = purchases.stream().filter(this::hasExistingPdf).count();
-        HBox tools = new HBox(12,
-                buildStatusBadge(existingCount + " presents", "status-success"),
-                buildStatusBadge((purchases.size() - existingCount) + " manquants", "status-warning")
-        );
-        Button exportButton = new Button("Exporter mes billets (.zip)");
-        exportButton.setOnAction(event -> exportPurchasesArchive(purchases));
-        tools.getChildren().add(exportButton);
-        page.getChildren().add(tools);
+        long presentCount = allPurchases.stream().filter(this::hasExistingPdf).count();
+        long missingCount = allPurchases.stream().filter(purchase -> resolvePdfStatus(purchase).equals("manquant")).count();
+        long regeneratedCount = allPurchases.stream().filter(purchase -> resolvePdfStatus(purchase).equals("regenere")).count();
 
         TableView<Purchase> tableView = new TableView<>();
         tableView.getStyleClass().add("data-table");
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
-        tableView.setItems(FXCollections.observableArrayList(purchases));
+        tableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        ObservableList<Purchase> visiblePurchases = FXCollections.observableArrayList(allPurchases);
+        tableView.setItems(visiblePurchases);
         VBox.setVgrow(tableView, Priority.ALWAYS);
+
+        HBox filters = new HBox(10);
+        Button allButton = new Button("Tous");
+        Button presentButton = new Button("Presents");
+        Button missingButton = new Button("Manquants");
+        Button regeneratedButton = new Button("Regeneres");
+        filters.getChildren().addAll(
+                allButton,
+                presentButton,
+                missingButton,
+                regeneratedButton,
+                buildStatusBadge(presentCount + " presents", "status-success"),
+                buildStatusBadge(missingCount + " manquants", "status-warning"),
+                buildStatusBadge(regeneratedCount + " regeneres", "status-info")
+        );
+
+        allButton.setOnAction(event -> visiblePurchases.setAll(allPurchases));
+        presentButton.setOnAction(event -> visiblePurchases.setAll(allPurchases.stream().filter(this::hasExistingPdf).toList()));
+        missingButton.setOnAction(event -> visiblePurchases.setAll(allPurchases.stream().filter(purchase -> resolvePdfStatus(purchase).equals("manquant")).toList()));
+        regeneratedButton.setOnAction(event -> visiblePurchases.setAll(allPurchases.stream().filter(purchase -> resolvePdfStatus(purchase).equals("regenere")).toList()));
+
+        Label selectionHint = new Label("Selection multiple: Ctrl+clic dans le tableau, puis exporte uniquement la selection.");
+        selectionHint.getStyleClass().add("section-subtitle");
+
+        Button exportSelectionButton = new Button("Exporter la selection (.zip)");
+        exportSelectionButton.setOnAction(event -> exportSelectedPurchases(tableView));
+
+        HBox tools = new HBox(12, exportSelectionButton);
 
         TableColumn<Purchase, String> ticketNumberColumn = new TableColumn<>("Numero");
         ticketNumberColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().ticketNumber()));
@@ -229,7 +255,7 @@ public class ClientDashboardController {
         });
 
         tableView.getColumns().setAll(ticketNumberColumn, eventColumn, seatsColumn, statusColumn, pathColumn, actionColumn);
-        page.getChildren().add(tableView);
+        page.getChildren().addAll(filters, selectionHint, tools, tableView);
         contentPane.getChildren().setAll(page);
     }
 
@@ -450,7 +476,13 @@ public class ClientDashboardController {
         }
     }
 
-    private void exportPurchasesArchive(List<Purchase> purchases) {
+    private void exportSelectedPurchases(TableView<Purchase> tableView) {
+        List<Purchase> selectedPurchases = new ArrayList<>(tableView.getSelectionModel().getSelectedItems());
+        if (selectedPurchases.isEmpty()) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Selectionne au moins un billet dans le tableau."));
+            return;
+        }
+
         Client user = App.getCurrentUser();
         if (user == null) {
             return;
@@ -458,7 +490,7 @@ public class ClientDashboardController {
 
         List<Path> pdfPaths = new ArrayList<>();
         int regenerated = 0;
-        for (Purchase purchase : purchases) {
+        for (Purchase purchase : selectedPurchases) {
             if (hasExistingPdf(purchase)) {
                 pdfPaths.add(Path.of(purchase.pdfPath()));
                 continue;
