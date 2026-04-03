@@ -2,128 +2,137 @@ package fr.billetterie.dao;
 
 import fr.billetterie.model.Spectacle;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 public class SpectacleDAO {
 
-    // Mappe une ligne SQL -> objet Spectacle
-    private static Spectacle map(ResultSet rs) throws SQLException {
+    private SpectacleDAO() {
+    }
+
+    private static Spectacle map(ResultSet rs) throws java.sql.SQLException {
         return new Spectacle(
                 rs.getInt("id"),
                 rs.getString("titre"),
-                rs.getString("description"),
-                rs.getString("lieu")
+                rs.getString("lieu"),
+                rs.getString("affiche"),
+                rs.getString("tags"),
+                (Integer) rs.getObject("duree"),
+                rs.getString("description_courte"),
+                rs.getString("description_longue"),
+                rs.getString("langue"),
+                (Integer) rs.getObject("age_minimum"),
+                rs.getString("photos")
         );
     }
 
-    // -----------------------------------------
-    // GET ALL
-    // -----------------------------------------
     public static List<Spectacle> getAll() {
         List<Spectacle> list = new ArrayList<>();
-        String sql = "SELECT * FROM Spectacle ORDER BY titre ASC";
+        String sql = "SELECT * FROM spectacle ORDER BY titre ASC";
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
-            while (rs.next()) list.add(map(rs));
-
-        } catch (SQLException e) {
+            while (rs.next()) {
+                list.add(map(rs));
+            }
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         return list;
     }
 
-    // -----------------------------------------
-    // GET BY ID
-    // -----------------------------------------
     public static Spectacle getById(int id) {
-        String sql = "SELECT * FROM Spectacle WHERE id = ?";
-        Spectacle s = null;
+        String sql = "SELECT * FROM spectacle WHERE id = ?";
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setInt(1, id);
             ResultSet rs = stmt.executeQuery();
-
             if (rs.next()) {
-                s = map(rs);
+                return map(rs);
             }
-
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
-        return s;
+        return null;
     }
 
-    // -----------------------------------------
-    // INSERT
-    // -----------------------------------------
-    public static void save(Spectacle s) {
+    public static void save(Spectacle spectacle) {
         String sql = """
-            INSERT INTO Spectacle (titre, description, lieu)
-            VALUES (?, ?, ?)
+            INSERT INTO spectacle (titre, lieu, affiche, tags, duree, description_courte, description_longue, langue, age_minimum, photos)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            stmt.setString(1, s.getTitre());
-            stmt.setString(2, s.getDescription());
-            stmt.setString(3, s.getLieu());
+            stmt.setString(1, spectacle.getTitre());
+            stmt.setString(2, spectacle.getLieu());
+            stmt.setString(3, spectacle.getAffiche());
+            stmt.setString(4, spectacle.getTags());
+            stmt.setObject(5, spectacle.getDuree());
+            stmt.setString(6, spectacle.getDescriptionCourte());
+            stmt.setString(7, spectacle.getDescriptionLongue());
+            stmt.setString(8, spectacle.getLangue());
+            stmt.setObject(9, spectacle.getAgeMinimum());
+            stmt.setString(10, spectacle.getPhotos());
             stmt.executeUpdate();
 
             ResultSet rs = stmt.getGeneratedKeys();
-            if (rs.next()) s.setId(rs.getInt(1));
-
-        } catch (SQLException e) {
+            if (rs.next()) {
+                spectacle.setId(rs.getInt(1));
+            }
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // -----------------------------------------
-    // UPDATE
-    // -----------------------------------------
-    public static void update(Spectacle s) {
+    public static void update(Spectacle spectacle) {
         String sql = """
-            UPDATE Spectacle
-            SET titre = ?, description = ?, lieu = ?
+            UPDATE spectacle
+            SET titre = ?, lieu = ?, affiche = ?, tags = ?, duree = ?, description_courte = ?,
+                description_longue = ?, langue = ?, age_minimum = ?, photos = ?
             WHERE id = ?
         """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, s.getTitre());
-            stmt.setString(2, s.getDescription());
-            stmt.setString(3, s.getLieu());
-            stmt.setInt(4, s.getId());
+            stmt.setString(1, spectacle.getTitre());
+            stmt.setString(2, spectacle.getLieu());
+            stmt.setString(3, spectacle.getAffiche());
+            stmt.setString(4, spectacle.getTags());
+            stmt.setObject(5, spectacle.getDuree());
+            stmt.setString(6, spectacle.getDescriptionCourte());
+            stmt.setString(7, spectacle.getDescriptionLongue());
+            stmt.setString(8, spectacle.getLangue());
+            stmt.setObject(9, spectacle.getAgeMinimum());
+            stmt.setString(10, spectacle.getPhotos());
+            stmt.setInt(11, spectacle.getId());
             stmt.executeUpdate();
-
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    // -----------------------------------------
-    // DELETE
-    // -----------------------------------------
     public static void delete(int id) {
-        String sql = "DELETE FROM Spectacle WHERE id = ?";
+        String sql = "DELETE FROM spectacle WHERE id = ?";
 
         try (Connection conn = Database.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setInt(1, id);
             stmt.executeUpdate();
-
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

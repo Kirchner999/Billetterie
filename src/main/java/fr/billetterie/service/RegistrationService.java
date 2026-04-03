@@ -11,8 +11,10 @@ public class RegistrationService {
         this.clientRepository = clientRepository;
     }
 
-    public RegistrationResult register(String username, String ignoredFullName, String ignoredEmail, String password) {
+    public RegistrationResult register(String username, String fullName, String email, String password) {
         String normalizedUsername = normalize(username);
+        String normalizedFullName = normalize(fullName);
+        String normalizedEmail = normalize(email);
         String normalizedPassword = normalize(password);
 
         if (normalizedUsername.isEmpty() || normalizedPassword.isEmpty()) {
@@ -27,11 +29,25 @@ public class RegistrationService {
             return RegistrationResult.failure("Le mot de passe doit contenir au moins 6 caracteres.");
         }
 
+        if (!normalizedEmail.isEmpty() && !normalizedEmail.contains("@")) {
+            return RegistrationResult.failure("L'email n'est pas valide.");
+        }
+
         if (clientRepository.usernameExists(normalizedUsername)) {
             return RegistrationResult.failure("Ce nom d'utilisateur est deja utilise !");
         }
 
-        Client client = new Client(0, normalizedUsername, normalizedPassword, "user");
+        Client client = new Client(
+                normalizedUsername,
+                normalizedFullName.isEmpty() ? normalizedUsername : normalizedFullName,
+                "",
+                null,
+                normalizedEmail.isEmpty() ? normalizedUsername : normalizedEmail,
+                normalizedPassword,
+                null,
+                "user",
+                false
+        );
         if (!clientRepository.register(client)) {
             return RegistrationResult.failure("Erreur lors de l'inscription.");
         }

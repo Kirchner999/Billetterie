@@ -96,15 +96,56 @@ public class TicketCatalogDAO {
     }
 
     public static boolean createTicket(Ticket ticket) {
-        String sql = "INSERT INTO tickets (event_name, event_date, price, stock) VALUES (?, ?, ?, ?)";
+        String insertSpectacleSql = """
+                INSERT INTO spectacle (
+                    titre, lieu, affiche, tags, duree, description_courte, description_longue, langue, age_minimum, photos
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """;
+        String insertRepresentationSql = """
+                INSERT INTO representation (id_spectacle, date_heure, salle, prix, stock)
+                VALUES (?, ?, ?, ?, ?)
+                """;
 
-        try (Connection conn = Database.getConnection();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
-            pst.setString(1, ticket.eventName());
-            pst.setTimestamp(2, java.sql.Timestamp.valueOf(ticket.eventDate()));
-            pst.setBigDecimal(3, ticket.price());
-            pst.setInt(4, ticket.stock());
-            pst.executeUpdate();
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                int spectacleId;
+                try (PreparedStatement pst = conn.prepareStatement(insertSpectacleSql, Statement.RETURN_GENERATED_KEYS)) {
+                    pst.setString(1, ticket.eventName());
+                    pst.setString(2, "Salle principale");
+                    pst.setString(3, null);
+                    pst.setString(4, "spectacle");
+                    pst.setObject(5, 120);
+                    pst.setString(6, ticket.eventName());
+                    pst.setString(7, "Spectacle cree depuis le dashboard admin.");
+                    pst.setString(8, "Francais");
+                    pst.setObject(9, 0);
+                    pst.setString(10, null);
+                    pst.executeUpdate();
+                    try (ResultSet keys = pst.getGeneratedKeys()) {
+                        if (!keys.next()) {
+                            conn.rollback();
+                            return false;
+                        }
+                        spectacleId = keys.getInt(1);
+                    }
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(insertRepresentationSql)) {
+                    pst.setInt(1, spectacleId);
+                    pst.setTimestamp(2, java.sql.Timestamp.valueOf(ticket.eventDate()));
+                    pst.setString(3, "Salle principale");
+                    pst.setBigDecimal(4, ticket.price());
+                    pst.setInt(5, ticket.stock());
+                    pst.executeUpdate();
+                }
+                conn.commit();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
             return true;
         } catch (Exception e) {
             System.out.println("Erreur createTicket()");
@@ -114,7 +155,12 @@ public class TicketCatalogDAO {
     }
 
     public static boolean updateTicket(Ticket ticket) {
-        String sql = "UPDATE tickets SET event_name = ?, event_date = ?, price = ?, stock = ? WHERE id = ?";
+        String sql = """
+                UPDATE representation r
+                JOIN spectacle s ON s.id = r.id_spectacle
+                SET s.titre = ?, r.date_heure = ?, r.prix = ?, r.stock = ?
+                WHERE r.id = ?
+                """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement pst = conn.prepareStatement(sql)) {
@@ -132,9 +178,9 @@ public class TicketCatalogDAO {
     }
 
     public static boolean deleteTicket(int ticketId) {
-        String deletePurchasesSql = "DELETE FROM purchases WHERE ticket_id = ?";
+        String deletePurchasesSql = "DELETE FROM billet WHERE id_representation = ?";
         String deleteSeatsSql = "DELETE FROM seats WHERE ticket_id = ?";
-        String deleteTicketSql = "DELETE FROM tickets WHERE id = ?";
+        String deleteTicketSql = "DELETE FROM representation WHERE id = ?";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -248,9 +294,18 @@ public class TicketCatalogDAO {
     }
 
     public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
-        String ticketSql = "SELECT event_name, price, stock FROM tickets WHERE id = ? FOR UPDATE";
-        String stockUpdateSql = "UPDATE tickets SET stock = stock - ? WHERE id = ?";
-        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date, status) VALUES (?, ?, ?, ?, NOW(), 'CONFIRMED')";
+        String ticketSql = """
+                SELECT s.titre AS event_name, r.prix AS price, r.stock AS stock
+                FROM representation r
+                JOIN spectacle s ON s.id = r.id_spectacle
+                WHERE r.id = ?
+                FOR UPDATE
+                """;
+        String stockUpdateSql = "UPDATE representation SET stock = stock - ? WHERE id = ?";
+        String purchaseSql = """
+                INSERT INTO billet (numero, id_representation, id_client, statut, quantite, total, date_achat)
+                VALUES (?, ?, ?, 'valide', ?, ?, NOW())
+                """;
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -309,10 +364,11 @@ public class TicketCatalogDAO {
                 BigDecimal total = price.multiply(BigDecimal.valueOf(quantity));
                 Integer purchaseId = null;
                 try (PreparedStatement pst = conn.prepareStatement(purchaseSql, Statement.RETURN_GENERATED_KEYS)) {
-                    pst.setInt(1, userId);
+                    pst.setString(1, buildTicketNumber(conn, ticketId));
                     pst.setInt(2, ticketId);
-                    pst.setInt(3, quantity);
-                    pst.setBigDecimal(4, total);
+                    pst.setInt(3, userId);
+                    pst.setInt(4, quantity);
+                    pst.setBigDecimal(5, total);
                     pst.executeUpdate();
 
                     try (ResultSet keys = pst.getGeneratedKeys()) {
@@ -810,30 +866,9 @@ public class TicketCatalogDAO {
     }
 
     public static PurchaseOperationResult alignTicketStockWithSeats(int ticketId) {
-        String sql = """
-                UPDATE tickets t
-                JOIN (
-                    SELECT
-                        ticket_id,
-                        COUNT(*) - COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS available_seats
-                    FROM seats
-                    WHERE ticket_id = ?
-                    GROUP BY ticket_id
-                ) seat_stats ON seat_stats.ticket_id = t.id
-                SET t.stock = seat_stats.available_seats
-                WHERE t.id = ?
-                """;
-
-        try (Connection conn = Database.getConnection();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
+        try (Connection conn = Database.getConnection()) {
             ensurePurchaseArtifactsSchema(conn);
-            pst.setInt(1, ticketId);
-            pst.setInt(2, ticketId);
-            int updated = pst.executeUpdate();
-            if (updated == 0) {
-                return PurchaseOperationResult.failure("Aucun plan de salle a aligner pour cet evenement.");
-            }
-            return PurchaseOperationResult.success("Stock aligne sur le nombre reel de sieges libres.");
+            return alignTicketStockWithSeatsTransactional(conn, ticketId);
         } catch (Exception e) {
             System.out.println("Erreur alignTicketStockWithSeats()");
             e.printStackTrace();
@@ -958,22 +993,19 @@ public class TicketCatalogDAO {
     }
 
     public static PurchaseOperationResult alignAllTicketStocksWithSeats() {
-        String sql = """
-                UPDATE tickets t
-                JOIN (
-                    SELECT
-                        ticket_id,
-                        COUNT(*) - COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS available_seats
-                    FROM seats
-                    GROUP BY ticket_id
-                ) seat_stats ON seat_stats.ticket_id = t.id
-                SET t.stock = seat_stats.available_seats
-                """;
+        String selectSql = "SELECT DISTINCT ticket_id FROM seats ORDER BY ticket_id";
 
-        try (Connection conn = Database.getConnection();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
+        try (Connection conn = Database.getConnection()) {
             ensurePurchaseArtifactsSchema(conn);
-            int updated = pst.executeUpdate();
+            int updated = 0;
+            try (PreparedStatement pst = conn.prepareStatement(selectSql);
+                 ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    if (alignTicketStockWithSeatsTransactional(conn, rs.getInt(1)).success()) {
+                        updated++;
+                    }
+                }
+            }
             return PurchaseOperationResult.success("Correction globale terminee sur " + updated + " spectacle(s).");
         } catch (Exception e) {
             System.out.println("Erreur alignAllTicketStocksWithSeats()");
@@ -1153,13 +1185,23 @@ public class TicketCatalogDAO {
 
     public static PurchaseOperationResult cancelPurchase(int purchaseId, String reason) {
         String selectSql = """
-                SELECT p.ticket_id, p.quantity, COALESCE(p.status, 'CONFIRMED') AS purchase_status, t.event_name
-                FROM purchases p
-                JOIN tickets t ON t.id = p.ticket_id
-                WHERE p.id = ?
+                SELECT
+                    b.id_representation AS ticket_id,
+                    b.quantite AS quantity,
+                    CASE
+                        WHEN b.statut = 'valide' THEN 'CONFIRMED'
+                        WHEN b.statut = 'annule' THEN 'CANCELLED'
+                        WHEN b.statut = 'rembourse' THEN 'REFUNDED'
+                        ELSE 'CONFIRMED'
+                    END AS purchase_status,
+                    s.titre AS event_name
+                FROM billet b
+                JOIN representation r ON r.id = b.id_representation
+                JOIN spectacle s ON s.id = r.id_spectacle
+                WHERE b.id = ?
                 FOR UPDATE
                 """;
-        String restockSql = "UPDATE tickets SET stock = stock + ? WHERE id = ?";
+        String restockSql = "UPDATE representation SET stock = stock + ? WHERE id = ?";
         String releaseSeatsSql = """
                 UPDATE seats s
                 JOIN purchase_seats ps
@@ -1168,7 +1210,7 @@ public class TicketCatalogDAO {
                 SET s.is_taken = 0
                 WHERE s.ticket_id = ?
                 """;
-        String cancelSql = "UPDATE purchases SET status = 'CANCELLED', refunded_at = NULL WHERE id = ?";
+        String cancelSql = "UPDATE billet SET statut = 'annule', refunded_at = NULL WHERE id = ?";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -1241,13 +1283,24 @@ public class TicketCatalogDAO {
 
     public static PurchaseOperationResult refundPurchase(int purchaseId, String reason) {
         String selectSql = """
-                SELECT p.ticket_id, p.quantity, p.total, COALESCE(p.status, 'CONFIRMED') AS purchase_status, t.event_name
-                FROM purchases p
-                JOIN tickets t ON t.id = p.ticket_id
-                WHERE p.id = ?
+                SELECT
+                    b.id_representation AS ticket_id,
+                    b.quantite AS quantity,
+                    b.total,
+                    CASE
+                        WHEN b.statut = 'valide' THEN 'CONFIRMED'
+                        WHEN b.statut = 'annule' THEN 'CANCELLED'
+                        WHEN b.statut = 'rembourse' THEN 'REFUNDED'
+                        ELSE 'CONFIRMED'
+                    END AS purchase_status,
+                    s.titre AS event_name
+                FROM billet b
+                JOIN representation r ON r.id = b.id_representation
+                JOIN spectacle s ON s.id = r.id_spectacle
+                WHERE b.id = ?
                 FOR UPDATE
                 """;
-        String restockSql = "UPDATE tickets SET stock = stock + ? WHERE id = ?";
+        String restockSql = "UPDATE representation SET stock = stock + ? WHERE id = ?";
         String releaseSeatsSql = """
                 UPDATE seats s
                 JOIN purchase_seats ps
@@ -1256,7 +1309,7 @@ public class TicketCatalogDAO {
                 SET s.is_taken = 0
                 WHERE s.ticket_id = ?
                 """;
-        String refundSql = "UPDATE purchases SET status = 'REFUNDED', refunded_at = NOW() WHERE id = ?";
+        String refundSql = "UPDATE billet SET statut = 'rembourse', refunded_at = NOW() WHERE id = ?";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -1330,10 +1383,10 @@ public class TicketCatalogDAO {
     }
 
     public static int cleanupExpiredTickets() {
-        String expiredIdsSql = "SELECT id FROM tickets WHERE event_date < NOW()";
-        String deletePurchasesSql = "DELETE FROM purchases WHERE ticket_id = ?";
+        String expiredIdsSql = "SELECT id FROM representation WHERE date_heure < NOW()";
+        String deletePurchasesSql = "DELETE FROM billet WHERE id_representation = ?";
         String deleteSeatsSql = "DELETE FROM seats WHERE ticket_id = ?";
-        String deleteTicketSql = "DELETE FROM tickets WHERE id = ?";
+        String deleteTicketSql = "DELETE FROM representation WHERE id = ?";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -1410,14 +1463,6 @@ public class TicketCatalogDAO {
     private static void ensurePurchaseArtifactsSchema(Connection conn) throws SQLException {
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("""
-                    ALTER TABLE purchases
-                    ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED'
-                    """);
-            st.executeUpdate("""
-                    ALTER TABLE purchases
-                    ADD COLUMN IF NOT EXISTS refunded_at DATETIME NULL
-                    """);
-            st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS ticket_files (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         purchase_id INT NOT NULL,
@@ -1426,7 +1471,7 @@ public class TicketCatalogDAO {
                         generated_at DATETIME NOT NULL,
                         UNIQUE KEY uk_ticket_files_purchase (purchase_id),
                         CONSTRAINT fk_ticket_files_purchase
-                            FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+                            FOREIGN KEY (purchase_id) REFERENCES billet(id)
                             ON DELETE CASCADE
                     )
                     """);
@@ -1436,7 +1481,7 @@ public class TicketCatalogDAO {
                         purchase_id INT NOT NULL,
                         seat_label VARCHAR(30) NOT NULL,
                         CONSTRAINT fk_purchase_seats_purchase
-                            FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+                            FOREIGN KEY (purchase_id) REFERENCES billet(id)
                             ON DELETE CASCADE
                     )
                     """);
@@ -1449,12 +1494,25 @@ public class TicketCatalogDAO {
                         created_at DATETIME NOT NULL,
                         INDEX idx_ticket_events_purchase (purchase_id),
                         CONSTRAINT fk_ticket_events_purchase
-                            FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+                            FOREIGN KEY (purchase_id) REFERENCES billet(id)
                             ON DELETE CASCADE
                     )
                     """);
         }
-        backfillLegacyPurchaseArtifacts(conn);
+    }
+
+    private static String buildTicketNumber(Connection conn, int ticketId) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM billet WHERE id_representation = ?";
+        int nextNumber = 1;
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, ticketId);
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    nextNumber = rs.getInt(1) + 1;
+                }
+            }
+        }
+        return "B-" + ticketId + "-" + String.format("%04d", nextNumber);
     }
 
     private static void logTicketEvent(Connection conn, int purchaseId, String eventType, String details) throws SQLException {
@@ -1581,7 +1639,7 @@ public class TicketCatalogDAO {
 
     private static PurchaseOperationResult alignTicketStockWithSeatsTransactional(Connection conn, int ticketId) throws SQLException {
         String sql = """
-                UPDATE tickets t
+                UPDATE representation r
                 JOIN (
                     SELECT
                         ticket_id,
@@ -1589,9 +1647,9 @@ public class TicketCatalogDAO {
                     FROM seats
                     WHERE ticket_id = ?
                     GROUP BY ticket_id
-                ) seat_stats ON seat_stats.ticket_id = t.id
-                SET t.stock = seat_stats.available_seats
-                WHERE t.id = ?
+                ) seat_stats ON seat_stats.ticket_id = r.id
+                SET r.stock = seat_stats.available_seats
+                WHERE r.id = ?
                 """;
 
         try (PreparedStatement pst = conn.prepareStatement(sql)) {
