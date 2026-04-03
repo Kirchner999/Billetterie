@@ -9,6 +9,7 @@ import fr.billetterie.repository.DaoTicketStoreRepository;
 import fr.billetterie.repository.PurchaseOperationResult;
 import fr.billetterie.repository.TicketStoreRepository;
 import fr.billetterie.service.PurchaseService;
+import fr.billetterie.service.TicketPdfService;
 import fr.billetterie.utils.ThemeManager;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
@@ -30,6 +31,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -45,6 +47,7 @@ public class ClientDashboardController {
 
     private final TicketStoreRepository ticketStoreRepository = new DaoTicketStoreRepository();
     private final PurchaseService purchaseService = new PurchaseService(ticketStoreRepository);
+    private final TicketPdfService ticketPdfService = new TicketPdfService();
 
     @FXML
     public void initialize() {
@@ -220,6 +223,8 @@ public class ClientDashboardController {
     private void handlePurchase(Ticket ticket) {
         List<Seat> seats = ticketStoreRepository.getAvailableSeats(ticket.id());
         PurchaseOperationResult purchaseResult;
+        int purchasedQuantity;
+        List<Seat> purchasedSeats = List.of();
 
         if (!seats.isEmpty()) {
             List<Seat> selectedSeats = askSeatSelection(ticket, seats);
@@ -231,6 +236,8 @@ public class ClientDashboardController {
                 return;
             }
 
+            purchasedSeats = selectedSeats;
+            purchasedQuantity = selectedSeats.size();
             purchaseResult = purchaseService.purchaseWithSeats(App.getCurrentUser(), ticket.id(), selectedSeats);
         } else {
             Optional<String> quantity = askQuantity(ticket);
@@ -246,6 +253,7 @@ public class ClientDashboardController {
                 return;
             }
 
+            purchasedQuantity = qty;
             if (!confirmQuantityPurchase(ticket, qty)) {
                 return;
             }
@@ -253,9 +261,27 @@ public class ClientDashboardController {
             purchaseResult = purchaseService.purchaseWithoutSeats(App.getCurrentUser(), ticket.id(), quantity.get());
         }
 
+        if (purchaseResult.success()) {
+            purchaseResult = appendReceiptMessage(purchaseResult, ticket, purchasedQuantity, purchasedSeats);
+        }
+
         showPurchaseAlert(purchaseResult);
         if (purchaseResult.success()) {
             showSpectacles();
+        }
+    }
+
+    private PurchaseOperationResult appendReceiptMessage(PurchaseOperationResult purchaseResult, Ticket ticket, int quantity, List<Seat> seats) {
+        Client user = App.getCurrentUser();
+        if (user == null) {
+            return purchaseResult;
+        }
+
+        try {
+            Path receiptPath = ticketPdfService.generateReceipt(user, ticket, quantity, seats);
+            return PurchaseOperationResult.success(purchaseResult.message() + "\n\nBillet PDF genere:\n" + receiptPath);
+        } catch (Exception e) {
+            return PurchaseOperationResult.success(purchaseResult.message() + "\n\nLe billet PDF n'a pas pu etre genere.");
         }
     }
 

@@ -34,13 +34,7 @@ public class TicketCatalogDAO {
              ResultSet rs = pst.executeQuery()) {
 
             while (rs.next()) {
-                tickets.add(new Ticket(
-                        rs.getInt("id"),
-                        rs.getString("event_name"),
-                        rs.getTimestamp("event_date").toLocalDateTime(),
-                        rs.getBigDecimal("price"),
-                        rs.getInt("stock")
-                ));
+                tickets.add(mapTicket(rs));
             }
         } catch (Exception e) {
             System.out.println("Erreur getAvailableTickets()");
@@ -48,6 +42,96 @@ public class TicketCatalogDAO {
         }
 
         return tickets;
+    }
+
+    public static List<Ticket> getAllTickets() {
+        List<Ticket> tickets = new ArrayList<>();
+        String sql = "SELECT id, event_name, event_date, price, stock FROM tickets ORDER BY event_date ASC";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql);
+             ResultSet rs = pst.executeQuery()) {
+
+            while (rs.next()) {
+                tickets.add(mapTicket(rs));
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getAllTickets()");
+            e.printStackTrace();
+        }
+
+        return tickets;
+    }
+
+    public static boolean createTicket(Ticket ticket) {
+        String sql = "INSERT INTO tickets (event_name, event_date, price, stock) VALUES (?, ?, ?, ?)";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, ticket.eventName());
+            pst.setTimestamp(2, java.sql.Timestamp.valueOf(ticket.eventDate()));
+            pst.setBigDecimal(3, ticket.price());
+            pst.setInt(4, ticket.stock());
+            pst.executeUpdate();
+            return true;
+        } catch (Exception e) {
+            System.out.println("Erreur createTicket()");
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static boolean updateTicket(Ticket ticket) {
+        String sql = "UPDATE tickets SET event_name = ?, event_date = ?, price = ?, stock = ? WHERE id = ?";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, ticket.eventName());
+            pst.setTimestamp(2, java.sql.Timestamp.valueOf(ticket.eventDate()));
+            pst.setBigDecimal(3, ticket.price());
+            pst.setInt(4, ticket.stock());
+            pst.setInt(5, ticket.id());
+            return pst.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Erreur updateTicket()");
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static boolean deleteTicket(int ticketId) {
+        String deletePurchasesSql = "DELETE FROM purchases WHERE ticket_id = ?";
+        String deleteSeatsSql = "DELETE FROM seats WHERE ticket_id = ?";
+        String deleteTicketSql = "DELETE FROM tickets WHERE id = ?";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement pst = conn.prepareStatement(deletePurchasesSql)) {
+                    pst.setInt(1, ticketId);
+                    pst.executeUpdate();
+                }
+                try (PreparedStatement pst = conn.prepareStatement(deleteSeatsSql)) {
+                    pst.setInt(1, ticketId);
+                    pst.executeUpdate();
+                }
+                try (PreparedStatement pst = conn.prepareStatement(deleteTicketSql)) {
+                    pst.setInt(1, ticketId);
+                    pst.executeUpdate();
+                }
+                conn.commit();
+                return true;
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur deleteTicket()");
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public static List<Seat> getAvailableSeats(int ticketId) {
@@ -248,6 +332,16 @@ public class TicketCatalogDAO {
 
     public static int countPurchases() {
         return count("SELECT COUNT(*) FROM purchases");
+    }
+
+    private static Ticket mapTicket(ResultSet rs) throws SQLException {
+        return new Ticket(
+                rs.getInt("id"),
+                rs.getString("event_name"),
+                rs.getTimestamp("event_date").toLocalDateTime(),
+                rs.getBigDecimal("price"),
+                rs.getInt("stock")
+        );
     }
 
     private static int countSeatsForTicket(Connection conn, int ticketId) throws SQLException {
