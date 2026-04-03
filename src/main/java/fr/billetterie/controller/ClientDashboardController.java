@@ -10,6 +10,7 @@ import fr.billetterie.repository.PurchaseOperationResult;
 import fr.billetterie.repository.TicketStoreRepository;
 import fr.billetterie.service.PurchaseService;
 import fr.billetterie.service.TicketPdfService;
+import fr.billetterie.service.TicketReceiptDocument;
 import fr.billetterie.utils.ThemeManager;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
@@ -30,8 +31,9 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
+import java.awt.Desktop;
 import java.math.BigDecimal;
-import java.nio.file.Path;
+import java.nio.file.Files;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -249,7 +251,7 @@ public class ClientDashboardController {
             try {
                 qty = Integer.parseInt(quantity.get().trim());
             } catch (Exception e) {
-                showPurchaseAlert(PurchaseOperationResult.failure("La quantite doit etre un nombre entier."));
+                showPurchaseFailure(PurchaseOperationResult.failure("La quantite doit etre un nombre entier."));
                 return;
             }
 
@@ -261,33 +263,73 @@ public class ClientDashboardController {
             purchaseResult = purchaseService.purchaseWithoutSeats(App.getCurrentUser(), ticket.id(), quantity.get());
         }
 
-        if (purchaseResult.success()) {
-            purchaseResult = appendReceiptMessage(purchaseResult, ticket, purchasedQuantity, purchasedSeats);
+        if (!purchaseResult.success()) {
+            showPurchaseFailure(purchaseResult);
+            return;
         }
 
-        showPurchaseAlert(purchaseResult);
-        if (purchaseResult.success()) {
-            showSpectacles();
-        }
+        TicketReceiptDocument receipt = generateReceipt(ticket, purchasedQuantity, purchasedSeats);
+        showPurchaseSuccess(purchaseResult, receipt);
+        showSpectacles();
     }
 
-    private PurchaseOperationResult appendReceiptMessage(PurchaseOperationResult purchaseResult, Ticket ticket, int quantity, List<Seat> seats) {
+    private TicketReceiptDocument generateReceipt(Ticket ticket, int quantity, List<Seat> seats) {
         Client user = App.getCurrentUser();
         if (user == null) {
-            return purchaseResult;
+            return null;
         }
 
         try {
-            Path receiptPath = ticketPdfService.generateReceipt(user, ticket, quantity, seats);
-            return PurchaseOperationResult.success(purchaseResult.message() + "\n\nBillet PDF genere:\n" + receiptPath);
+            return ticketPdfService.generateReceipt(user, ticket, quantity, seats);
         } catch (Exception e) {
-            return PurchaseOperationResult.success(purchaseResult.message() + "\n\nLe billet PDF n'a pas pu etre genere.");
+            return null;
         }
     }
 
-    private void showPurchaseAlert(PurchaseOperationResult purchaseResult) {
-        Alert.AlertType type = purchaseResult.success() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
-        Alert alert = new Alert(type, purchaseResult.message());
+    private void showPurchaseSuccess(PurchaseOperationResult purchaseResult, TicketReceiptDocument receipt) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        ButtonType closeButton = new ButtonType("Fermer");
+        alert.getButtonTypes().setAll(closeButton);
+        alert.setTitle("Achat confirme");
+        alert.setHeaderText("Reservation enregistree");
+
+        String content = purchaseResult.message();
+        if (receipt != null) {
+            content += "\n\nNumero de billet: " + receipt.ticketNumber();
+            content += "\nPDF genere: " + receipt.pdfPath();
+
+            ButtonType openPdfButton = new ButtonType("Ouvrir le billet");
+            alert.getButtonTypes().add(0, openPdfButton);
+            alert.setContentText(content);
+            Optional<ButtonType> response = alert.showAndWait();
+            if (response.isPresent() && response.get() == openPdfButton) {
+                openReceipt(receipt);
+            }
+            return;
+        }
+
+        alert.setContentText(content + "\n\nLe billet PDF n'a pas pu etre genere.");
+        alert.showAndWait();
+    }
+
+    private void openReceipt(TicketReceiptDocument receipt) {
+        try {
+            if (Desktop.isDesktopSupported() && Files.exists(receipt.pdfPath())) {
+                Desktop.getDesktop().open(receipt.pdfPath().toFile());
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+
+        Alert alert = new Alert(Alert.AlertType.WARNING,
+                "Impossible d'ouvrir automatiquement le PDF.\nChemin: " + receipt.pdfPath());
+        alert.setTitle("Ouverture du billet");
+        alert.setHeaderText("Le fichier existe mais n'a pas pu etre ouvert");
+        alert.showAndWait();
+    }
+
+    private void showPurchaseFailure(PurchaseOperationResult purchaseResult) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, purchaseResult.message());
         alert.showAndWait();
     }
 
@@ -376,7 +418,7 @@ public class ClientDashboardController {
 
     private boolean confirmQuantityPurchase(Ticket ticket, int quantity) {
         if (quantity <= 0) {
-            showPurchaseAlert(PurchaseOperationResult.failure("La quantite doit etre superieure a 0."));
+            showPurchaseFailure(PurchaseOperationResult.failure("La quantite doit etre superieure a 0."));
             return false;
         }
 
