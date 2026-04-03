@@ -5,6 +5,7 @@ import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.dao.TicketCatalogDAO;
 import fr.billetterie.model.AdminPurchaseRecord;
 import fr.billetterie.model.AdminSalesStat;
+import fr.billetterie.model.AdminSalesTimelinePoint;
 import fr.billetterie.model.Ticket;
 import fr.billetterie.model.TicketEventLog;
 import fr.billetterie.repository.DaoTicketAdminRepository;
@@ -17,6 +18,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.chart.BarChart;
+import javafx.scene.chart.LineChart;
 import javafx.scene.chart.PieChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
@@ -114,9 +116,13 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminSalesStat, Integer> colSalesCancelled;
     @FXML private TableColumn<AdminSalesStat, Integer> colSalesTicketsSold;
     @FXML private TableColumn<AdminSalesStat, String> colSalesRevenue;
+    @FXML private Button salesPeriodAllButton;
+    @FXML private Button salesPeriod7DaysButton;
+    @FXML private Button salesPeriod30DaysButton;
     @FXML private BarChart<String, Number> salesRevenueChart;
     @FXML private BarChart<String, Number> salesVolumeChart;
     @FXML private PieChart salesStatusChart;
+    @FXML private LineChart<String, Number> salesTimelineChart;
 
     @FXML private TextField eventNameField;
     @FXML private TextField eventDateField;
@@ -129,6 +135,7 @@ public class AdminDashboardController {
     private String purchaseFilterMode = "all";
     private String purchaseSearchText = "";
     private String auditSearchText = "";
+    private String salesPeriodMode = "all";
     private String purchaseSortMode = "date-desc";
     private String auditSortMode = "date-desc";
     private int purchasesPageIndex;
@@ -483,7 +490,7 @@ public class AdminDashboardController {
 
     @FXML
     public void exportSalesStatsCsv() {
-        List<AdminSalesStat> stats = TicketCatalogDAO.getSalesStatsByTicket();
+        List<AdminSalesStat> stats = TicketCatalogDAO.getSalesStatsByTicket(salesPeriodMode);
         if (stats.isEmpty()) {
             showResult(false, "Aucune statistique de vente a exporter.");
             return;
@@ -512,6 +519,24 @@ public class AdminDashboardController {
         } catch (IOException e) {
             showResult(false, "Impossible de generer le CSV des stats.");
         }
+    }
+
+    @FXML
+    public void showAllSalesPeriod() {
+        salesPeriodMode = "all";
+        refreshSalesStats();
+    }
+
+    @FXML
+    public void show7DaysSalesPeriod() {
+        salesPeriodMode = "7d";
+        refreshSalesStats();
+    }
+
+    @FXML
+    public void show30DaysSalesPeriod() {
+        salesPeriodMode = "30d";
+        refreshSalesStats();
     }
 
     private void refreshAdminView() {
@@ -623,9 +648,10 @@ public class AdminDashboardController {
     }
 
     private void refreshSalesStats() {
-        List<AdminSalesStat> stats = TicketCatalogDAO.getSalesStatsByTicket();
+        List<AdminSalesStat> stats = TicketCatalogDAO.getSalesStatsByTicket(salesPeriodMode);
         salesStatsTable.setItems(FXCollections.observableArrayList(stats));
         refreshSalesCharts(stats);
+        updateSalesPeriodButtons();
     }
 
     private void showResult(boolean success, String message) {
@@ -648,6 +674,12 @@ public class AdminDashboardController {
         updateFilterButton(auditSortDateButton, "date-desc".equals(auditSortMode));
         updateFilterButton(auditSortTypeButton, "type-asc".equals(auditSortMode));
         updateFilterButton(auditSortUserButton, "user-asc".equals(auditSortMode));
+    }
+
+    private void updateSalesPeriodButtons() {
+        updateFilterButton(salesPeriodAllButton, "all".equals(salesPeriodMode));
+        updateFilterButton(salesPeriod7DaysButton, "7d".equals(salesPeriodMode));
+        updateFilterButton(salesPeriod30DaysButton, "30d".equals(salesPeriodMode));
     }
 
     private void updateFilterButton(Button button, boolean active) {
@@ -725,6 +757,28 @@ public class AdminDashboardController {
             ));
             salesStatusChart.setLabelsVisible(true);
             salesStatusChart.setLegendVisible(true);
+        }
+
+        if (salesTimelineChart != null) {
+            salesTimelineChart.getData().clear();
+
+            XYChart.Series<String, Number> confirmedSeries = new XYChart.Series<>();
+            confirmedSeries.setName("CA confirme");
+            XYChart.Series<String, Number> refundedSeries = new XYChart.Series<>();
+            refundedSeries.setName("CA rembourse");
+
+            for (AdminSalesTimelinePoint point : TicketCatalogDAO.getSalesTimeline(salesPeriodMode)) {
+                confirmedSeries.getData().add(new XYChart.Data<>(point.label(), point.confirmedRevenue()));
+                refundedSeries.getData().add(new XYChart.Data<>(point.label(), point.refundedRevenue()));
+            }
+
+            salesTimelineChart.getData().add(confirmedSeries);
+            salesTimelineChart.getData().add(refundedSeries);
+            salesTimelineChart.setTitle(switch (salesPeriodMode) {
+                case "7d" -> "Evolution du CA sur 7 jours";
+                case "30d" -> "Evolution du CA sur 30 jours";
+                default -> "Evolution du CA sur 12 mois";
+            });
         }
     }
 

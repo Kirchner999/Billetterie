@@ -1,8 +1,9 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.chart.BarChart?>
 <?import javafx.scene.chart.CategoryAxis?>
+<?import javafx.scene.chart.LineChart?>
 <?import javafx.scene.chart.NumberAxis?>
 <?import javafx.scene.chart.PieChart?>
 <?import javafx.scene.control.Button?>
@@ -85,9 +86,12 @@
 
                 <VBox styleClass="card" spacing="14">
                     <Label text="Stats de vente par spectacle" styleClass="section-title"/>
-                    <Label text="Vue agregée des achats confirmes, remboursements, annulations, billets vendus et chiffre d'affaires." styleClass="section-subtitle" wrapText="true"/>
+                    <Label text="Vue agregee des achats confirmes, remboursements, annulations, billets vendus et chiffre d'affaires." styleClass="section-subtitle" wrapText="true"/>
 
                     <HBox spacing="12">
+                        <Button fx:id="salesPeriodAllButton" text="Tout" styleClass="button-secondary" onAction="#showAllSalesPeriod"/>
+                        <Button fx:id="salesPeriod7DaysButton" text="7 jours" styleClass="button-secondary" onAction="#show7DaysSalesPeriod"/>
+                        <Button fx:id="salesPeriod30DaysButton" text="30 jours" styleClass="button-secondary" onAction="#show30DaysSalesPeriod"/>
                         <Button text="Exporter stats CSV" styleClass="button-secondary" onAction="#exportSalesStatsCsv"/>
                     </HBox>
 
@@ -110,6 +114,15 @@
                             </yAxis>
                         </BarChart>
                     </HBox>
+
+                    <LineChart fx:id="salesTimelineChart" title="Evolution du CA" prefHeight="260" animated="false">
+                        <xAxis>
+                            <CategoryAxis label="Periode"/>
+                        </xAxis>
+                        <yAxis>
+                            <NumberAxis label="EUR"/>
+                        </yAxis>
+                    </LineChart>
 
                     <PieChart fx:id="salesStatusChart" title="Repartition des statuts" prefHeight="240" labelsVisible="true"/>
 

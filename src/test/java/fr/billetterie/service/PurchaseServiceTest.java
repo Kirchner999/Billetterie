@@ -1,4 +1,4 @@
-package fr.billetterie.service;
+﻿package fr.billetterie.service;
 
 import fr.billetterie.model.Client;
 import fr.billetterie.model.Seat;
@@ -110,10 +110,12 @@ class PurchaseServiceTest {
         }
 
         @Override
+        public void logTicketEvent(int purchaseId, String eventType, String details) {
+        }
+
+        @Override
         public Optional<fr.billetterie.model.Ticket> findTicketById(int ticketId) {
             return Optional.empty();
         }
     }
 }
-
-

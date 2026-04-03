@@ -2,6 +2,7 @@ package fr.billetterie.dao;
 
 import fr.billetterie.model.AdminPurchaseRecord;
 import fr.billetterie.model.AdminSalesStat;
+import fr.billetterie.model.AdminSalesTimelinePoint;
 import fr.billetterie.model.Purchase;
 import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
@@ -14,8 +15,14 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -547,6 +554,10 @@ public class TicketCatalogDAO {
     }
 
     public static List<AdminSalesStat> getSalesStatsByTicket() {
+        return getSalesStatsByTicket("all");
+    }
+
+    public static List<AdminSalesStat> getSalesStatsByTicket(String periodMode) {
         List<AdminSalesStat> stats = new ArrayList<>();
         String sql = """
                 SELECT
@@ -558,6 +569,7 @@ public class TicketCatalogDAO {
                     COALESCE(SUM(CASE WHEN COALESCE(p.status, 'CONFIRMED') = 'CONFIRMED' THEN p.total ELSE 0 END), 0) AS revenue
                 FROM tickets t
                 LEFT JOIN purchases p ON p.ticket_id = t.id
+                """ + buildSalesPeriodJoinClause(periodMode) + """
                 GROUP BY t.id, t.event_name
                 ORDER BY revenue DESC, tickets_sold DESC, t.event_name ASC
                 """;
@@ -583,6 +595,90 @@ public class TicketCatalogDAO {
         }
 
         return stats;
+    }
+
+    public static List<AdminSalesTimelinePoint> getSalesTimeline(String periodMode) {
+        List<AdminSalesTimelinePoint> points = new ArrayList<>();
+        String sql = """
+                SELECT
+                    purchase_date,
+                    refunded_at,
+                    total,
+                    COALESCE(status, 'CONFIRMED') AS purchase_status
+                FROM purchases
+                """ + buildSalesTimelineWhereClause(periodMode) + """
+                ORDER BY purchase_date ASC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql);
+                 ResultSet rs = pst.executeQuery()) {
+                if (isAllPeriod(periodMode)) {
+                    Map<YearMonth, RevenueBucket> buckets = initMonthlyBuckets(12);
+                    while (rs.next()) {
+                        if ("CONFIRMED".equalsIgnoreCase(rs.getString("purchase_status"))) {
+                            LocalDateTime purchaseDate = rs.getTimestamp("purchase_date").toLocalDateTime();
+                            YearMonth month = YearMonth.from(purchaseDate);
+                            RevenueBucket bucket = buckets.get(month);
+                            if (bucket != null) {
+                                bucket.confirmed = bucket.confirmed.add(rs.getBigDecimal("total"));
+                            }
+                        }
+                        if ("REFUNDED".equalsIgnoreCase(rs.getString("purchase_status")) && rs.getTimestamp("refunded_at") != null) {
+                            LocalDateTime refundDate = rs.getTimestamp("refunded_at").toLocalDateTime();
+                            YearMonth month = YearMonth.from(refundDate);
+                            RevenueBucket bucket = buckets.get(month);
+                            if (bucket != null) {
+                                bucket.refunded = bucket.refunded.add(rs.getBigDecimal("total"));
+                            }
+                        }
+                    }
+
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/yyyy");
+                    for (Map.Entry<YearMonth, RevenueBucket> entry : buckets.entrySet()) {
+                        points.add(new AdminSalesTimelinePoint(
+                                entry.getKey().format(formatter),
+                                entry.getValue().confirmed,
+                                entry.getValue().refunded
+                        ));
+                    }
+                } else {
+                    int days = resolveSalesPeriodDays(periodMode);
+                    Map<LocalDate, RevenueBucket> buckets = initDailyBuckets(days);
+                    while (rs.next()) {
+                        if ("CONFIRMED".equalsIgnoreCase(rs.getString("purchase_status"))) {
+                            LocalDate purchaseDate = rs.getTimestamp("purchase_date").toLocalDateTime().toLocalDate();
+                            RevenueBucket bucket = buckets.get(purchaseDate);
+                            if (bucket != null) {
+                                bucket.confirmed = bucket.confirmed.add(rs.getBigDecimal("total"));
+                            }
+                        }
+                        if ("REFUNDED".equalsIgnoreCase(rs.getString("purchase_status")) && rs.getTimestamp("refunded_at") != null) {
+                            LocalDate refundDate = rs.getTimestamp("refunded_at").toLocalDateTime().toLocalDate();
+                            RevenueBucket bucket = buckets.get(refundDate);
+                            if (bucket != null) {
+                                bucket.refunded = bucket.refunded.add(rs.getBigDecimal("total"));
+                            }
+                        }
+                    }
+
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM");
+                    for (Map.Entry<LocalDate, RevenueBucket> entry : buckets.entrySet()) {
+                        points.add(new AdminSalesTimelinePoint(
+                                entry.getKey().format(formatter),
+                                entry.getValue().confirmed,
+                                entry.getValue().refunded
+                        ));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getSalesTimeline()");
+            e.printStackTrace();
+        }
+
+        return points;
     }
 
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {
@@ -980,6 +1076,52 @@ public class TicketCatalogDAO {
         }
     }
 
+    private static String buildSalesPeriodJoinClause(String periodMode) {
+        int days = resolveSalesPeriodDays(periodMode);
+        if (days <= 0) {
+            return "";
+        }
+        return " AND p.purchase_date >= NOW() - INTERVAL " + days + " DAY ";
+    }
+
+    private static String buildSalesTimelineWhereClause(String periodMode) {
+        int days = resolveSalesPeriodDays(periodMode);
+        if (days <= 0) {
+            return "WHERE purchase_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH) OR refunded_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)";
+        }
+        return "WHERE purchase_date >= NOW() - INTERVAL " + days + " DAY OR refunded_at >= NOW() - INTERVAL " + days + " DAY";
+    }
+
+    private static int resolveSalesPeriodDays(String periodMode) {
+        return switch (periodMode) {
+            case "7d" -> 7;
+            case "30d" -> 30;
+            default -> 0;
+        };
+    }
+
+    private static boolean isAllPeriod(String periodMode) {
+        return resolveSalesPeriodDays(periodMode) == 0;
+    }
+
+    private static Map<LocalDate, RevenueBucket> initDailyBuckets(int days) {
+        LinkedHashMap<LocalDate, RevenueBucket> buckets = new LinkedHashMap<>();
+        LocalDate start = LocalDate.now().minusDays(Math.max(0, days - 1L));
+        for (int i = 0; i < days; i++) {
+            buckets.put(start.plusDays(i), new RevenueBucket());
+        }
+        return buckets;
+    }
+
+    private static Map<YearMonth, RevenueBucket> initMonthlyBuckets(int months) {
+        LinkedHashMap<YearMonth, RevenueBucket> buckets = new LinkedHashMap<>();
+        YearMonth start = YearMonth.now().minusMonths(Math.max(0, months - 1L));
+        for (int i = 0; i < months; i++) {
+            buckets.put(start.plusMonths(i), new RevenueBucket());
+        }
+        return buckets;
+    }
+
     private static boolean selectedSeatsAreAvailable(Connection conn, int ticketId, List<Integer> seatIds) throws SQLException {
         String placeholders = seatIds.stream().map(id -> "?").collect(Collectors.joining(", "));
         String sql = "SELECT COUNT(*) FROM seats WHERE ticket_id = ? AND is_taken = 0 AND id IN (" + placeholders + ")";
@@ -1034,5 +1176,10 @@ public class TicketCatalogDAO {
             e.printStackTrace();
             return 0;
         }
+    }
+
+    private static final class RevenueBucket {
+        private BigDecimal confirmed = BigDecimal.ZERO;
+        private BigDecimal refunded = BigDecimal.ZERO;
     }
 }
