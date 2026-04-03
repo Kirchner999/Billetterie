@@ -139,6 +139,12 @@
                         <Button text="Rembourser l'achat selectionne" styleClass="button-secondary" onAction="#refundSelectedPurchase"/>
                         <Button text="Exporter achats CSV" styleClass="button-secondary" onAction="#exportPurchasesCsv"/>
                     </HBox>
+
+                    <HBox spacing="10">
+                        <Button fx:id="purchasesPrevPageButton" text="Prec." styleClass="button-secondary" onAction="#showPreviousPurchasesPage"/>
+                        <Label fx:id="purchasesPageLabel" text="Page 1 / 1" styleClass="section-subtitle"/>
+                        <Button fx:id="purchasesNextPageButton" text="Suiv." styleClass="button-secondary" onAction="#showNextPurchasesPage"/>
+                    </HBox>
                 </VBox>
 
                 <VBox styleClass="card" spacing="14">
@@ -205,6 +211,7 @@
                     <HBox spacing="10">
                         <TextField fx:id="auditSearchField" promptText="Rechercher dans le journal des billets" HBox.hgrow="ALWAYS"/>
                         <Button text="Chercher" onAction="#applyAuditSearch"/>
+                        <Button text="Exporter audit CSV" styleClass="button-secondary" onAction="#exportAuditCsv"/>
                     </HBox>
 
                     <TableView fx:id="eventsLogTable" prefHeight="260" styleClass="data-table">
@@ -217,6 +224,12 @@
                             <TableColumn fx:id="colLogDetails" text="Details" prefWidth="320"/>
                         </columns>
                     </TableView>
+
+                    <HBox spacing="10">
+                        <Button fx:id="auditPrevPageButton" text="Prec." styleClass="button-secondary" onAction="#showPreviousAuditPage"/>
+                        <Label fx:id="auditPageLabel" text="Page 1 / 1" styleClass="section-subtitle"/>
+                        <Button fx:id="auditNextPageButton" text="Suiv." styleClass="button-secondary" onAction="#showNextAuditPage"/>
+                    </HBox>
                 </VBox>
             </VBox>
         </ScrollPane>

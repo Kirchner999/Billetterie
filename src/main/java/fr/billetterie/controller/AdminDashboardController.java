@@ -37,6 +37,8 @@ import java.util.Optional;
 public class AdminDashboardController {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final int PURCHASES_PAGE_SIZE = 10;
+    private static final int AUDIT_PAGE_SIZE = 12;
 
     @FXML private Label usersCountLabel;
     @FXML private Label ticketsCountLabel;
@@ -63,6 +65,9 @@ public class AdminDashboardController {
     @FXML private Button purchasesFilterConfirmedButton;
     @FXML private Button purchasesFilterCancelledButton;
     @FXML private Button purchasesFilterRefundedButton;
+    @FXML private Button purchasesPrevPageButton;
+    @FXML private Button purchasesNextPageButton;
+    @FXML private Label purchasesPageLabel;
     @FXML private Button openPdfButton;
 
     @FXML private Label detailUsernameLabel;
@@ -87,6 +92,9 @@ public class AdminDashboardController {
     @FXML private TableColumn<TicketEventLog, String> colLogTicket;
     @FXML private TableColumn<TicketEventLog, String> colLogDetails;
     @FXML private TextField auditSearchField;
+    @FXML private Button auditPrevPageButton;
+    @FXML private Button auditNextPageButton;
+    @FXML private Label auditPageLabel;
 
     @FXML private TextField eventNameField;
     @FXML private TextField eventDateField;
@@ -99,6 +107,10 @@ public class AdminDashboardController {
     private String purchaseFilterMode = "all";
     private String purchaseSearchText = "";
     private String auditSearchText = "";
+    private int purchasesPageIndex;
+    private int auditPageIndex;
+    private List<AdminPurchaseRecord> filteredPurchases = List.of();
+    private List<TicketEventLog> filteredAuditLogs = List.of();
 
     @FXML
     public void initialize() {
@@ -237,30 +249,35 @@ public class AdminDashboardController {
     @FXML
     public void showAllPurchases() {
         purchaseFilterMode = "all";
+        purchasesPageIndex = 0;
         refreshPurchases();
     }
 
     @FXML
     public void showConfirmedPurchases() {
         purchaseFilterMode = "confirmed";
+        purchasesPageIndex = 0;
         refreshPurchases();
     }
 
     @FXML
     public void showCancelledPurchases() {
         purchaseFilterMode = "cancelled";
+        purchasesPageIndex = 0;
         refreshPurchases();
     }
 
     @FXML
     public void showRefundedPurchases() {
         purchaseFilterMode = "refunded";
+        purchasesPageIndex = 0;
         refreshPurchases();
     }
 
     @FXML
     public void applyPurchaseSearch() {
         purchaseSearchText = purchaseSearchField != null ? purchaseSearchField.getText() : "";
+        purchasesPageIndex = 0;
         refreshPurchases();
     }
 
@@ -281,14 +298,45 @@ public class AdminDashboardController {
     @FXML
     public void applyAuditSearch() {
         auditSearchText = auditSearchField != null ? auditSearchField.getText() : "";
+        auditPageIndex = 0;
         refreshAudit();
     }
 
     @FXML
+    public void showPreviousPurchasesPage() {
+        if (purchasesPageIndex > 0) {
+            purchasesPageIndex--;
+            applyPurchasesPage();
+        }
+    }
+
+    @FXML
+    public void showNextPurchasesPage() {
+        if ((purchasesPageIndex + 1) * PURCHASES_PAGE_SIZE < filteredPurchases.size()) {
+            purchasesPageIndex++;
+            applyPurchasesPage();
+        }
+    }
+
+    @FXML
+    public void showPreviousAuditPage() {
+        if (auditPageIndex > 0) {
+            auditPageIndex--;
+            applyAuditPage();
+        }
+    }
+
+    @FXML
+    public void showNextAuditPage() {
+        if ((auditPageIndex + 1) * AUDIT_PAGE_SIZE < filteredAuditLogs.size()) {
+            auditPageIndex++;
+            applyAuditPage();
+        }
+    }
+
+    @FXML
     public void exportPurchasesCsv() {
-        List<AdminPurchaseRecord> purchases = purchasesTable != null
-                ? new ArrayList<>(purchasesTable.getItems())
-                : List.of();
+        List<AdminPurchaseRecord> purchases = filteredPurchases;
 
         if (purchases.isEmpty()) {
             showResult(false, "Aucun achat a exporter avec les filtres actuels.");
@@ -328,6 +376,41 @@ public class AdminDashboardController {
             alert.showAndWait();
         } catch (IOException e) {
             showResult(false, "Impossible de generer le fichier CSV.");
+        }
+    }
+
+    @FXML
+    public void exportAuditCsv() {
+        List<TicketEventLog> logs = filteredAuditLogs;
+        if (logs.isEmpty()) {
+            showResult(false, "Aucune ligne d'audit a exporter avec les filtres actuels.");
+            return;
+        }
+
+        try {
+            Path exportDir = Path.of("target", "exports");
+            Files.createDirectories(exportDir);
+            Path csvPath = exportDir.resolve("audit-billets-" + System.currentTimeMillis() + ".csv");
+
+            List<String> lines = new ArrayList<>();
+            lines.add("id;purchase_id;username;event_name;ticket_number;event_type;details;created_at");
+            for (TicketEventLog log : logs) {
+                lines.add(String.join(";",
+                        csvValue(String.valueOf(log.id())),
+                        csvValue(String.valueOf(log.purchaseId())),
+                        csvValue(log.username()),
+                        csvValue(log.eventName()),
+                        csvValue(log.ticketNumber()),
+                        csvValue(log.eventType()),
+                        csvValue(log.details()),
+                        csvValue(DATE_FORMAT.format(log.createdAt()))
+                ));
+            }
+
+            Files.write(csvPath, lines, StandardCharsets.UTF_8);
+            showResult(true, "Export CSV du journal cree.\nChemin: " + csvPath + "\nLignes: " + logs.size());
+        } catch (IOException e) {
+            showResult(false, "Impossible de generer le CSV du journal.");
         }
     }
 
@@ -405,7 +488,7 @@ public class AdminDashboardController {
     }
 
     private void refreshPurchases() {
-        List<AdminPurchaseRecord> purchases = TicketCatalogDAO.getAdminPurchases().stream()
+        filteredPurchases = TicketCatalogDAO.getAdminPurchases().stream()
                 .filter(purchase -> switch (purchaseFilterMode) {
                     case "confirmed" -> "CONFIRMED".equalsIgnoreCase(purchase.status());
                     case "cancelled" -> "CANCELLED".equalsIgnoreCase(purchase.status());
@@ -414,15 +497,15 @@ public class AdminDashboardController {
                 })
                 .filter(purchase -> matchesPurchaseSearch(purchase, purchaseSearchText))
                 .toList();
-        purchasesTable.setItems(FXCollections.observableArrayList(purchases));
+        applyPurchasesPage();
         updatePurchaseFilterButtons();
     }
 
     private void refreshAudit() {
-        List<TicketEventLog> logs = TicketCatalogDAO.getRecentTicketEvents(100).stream()
+        filteredAuditLogs = TicketCatalogDAO.getRecentTicketEvents(100).stream()
                 .filter(log -> matchesAuditSearch(log, auditSearchText))
                 .toList();
-        eventsLogTable.setItems(FXCollections.observableArrayList(logs));
+        applyAuditPage();
     }
 
     private void showResult(boolean success, String message) {
@@ -526,5 +609,39 @@ public class AdminDashboardController {
         alert.setTitle("Ouverture du billet");
         alert.setHeaderText("Le fichier existe peut-etre mais n'a pas pu etre ouvert");
         alert.showAndWait();
+    }
+
+    private void applyPurchasesPage() {
+        int pageCount = Math.max(1, (int) Math.ceil((double) filteredPurchases.size() / PURCHASES_PAGE_SIZE));
+        purchasesPageIndex = Math.min(purchasesPageIndex, pageCount - 1);
+        int fromIndex = Math.min(purchasesPageIndex * PURCHASES_PAGE_SIZE, filteredPurchases.size());
+        int toIndex = Math.min(fromIndex + PURCHASES_PAGE_SIZE, filteredPurchases.size());
+        purchasesTable.setItems(FXCollections.observableArrayList(filteredPurchases.subList(fromIndex, toIndex)));
+        if (purchasesPageLabel != null) {
+            purchasesPageLabel.setText("Page " + (purchasesPageIndex + 1) + " / " + pageCount);
+        }
+        if (purchasesPrevPageButton != null) {
+            purchasesPrevPageButton.setDisable(purchasesPageIndex == 0);
+        }
+        if (purchasesNextPageButton != null) {
+            purchasesNextPageButton.setDisable(purchasesPageIndex >= pageCount - 1 || filteredPurchases.isEmpty());
+        }
+    }
+
+    private void applyAuditPage() {
+        int pageCount = Math.max(1, (int) Math.ceil((double) filteredAuditLogs.size() / AUDIT_PAGE_SIZE));
+        auditPageIndex = Math.min(auditPageIndex, pageCount - 1);
+        int fromIndex = Math.min(auditPageIndex * AUDIT_PAGE_SIZE, filteredAuditLogs.size());
+        int toIndex = Math.min(fromIndex + AUDIT_PAGE_SIZE, filteredAuditLogs.size());
+        eventsLogTable.setItems(FXCollections.observableArrayList(filteredAuditLogs.subList(fromIndex, toIndex)));
+        if (auditPageLabel != null) {
+            auditPageLabel.setText("Page " + (auditPageIndex + 1) + " / " + pageCount);
+        }
+        if (auditPrevPageButton != null) {
+            auditPrevPageButton.setDisable(auditPageIndex == 0);
+        }
+        if (auditNextPageButton != null) {
+            auditNextPageButton.setDisable(auditPageIndex >= pageCount - 1 || filteredAuditLogs.isEmpty());
+        }
     }
 }
