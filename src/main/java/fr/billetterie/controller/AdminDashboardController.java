@@ -265,35 +265,47 @@ public class AdminDashboardController {
             return;
         }
 
-        TextInputDialog rowDialog = new TextInputDialog();
-        rowDialog.setTitle("Generer une rangee");
-        rowDialog.setHeaderText("Creation de sieges");
-        rowDialog.setContentText("Nom de la rangee :");
+        TextInputDialog rowDialog = new TextInputDialog("A");
+        rowDialog.setTitle("Generer des rangees");
+        rowDialog.setHeaderText("Creation de plusieurs rangees");
+        rowDialog.setContentText("Lettre de depart :");
 
-        Optional<String> rowAnswer = rowDialog.showAndWait();
-        if (rowAnswer.isEmpty()) {
+        Optional<String> startRowAnswer = rowDialog.showAndWait();
+        if (startRowAnswer.isEmpty()) {
             return;
         }
 
-        TextInputDialog countDialog = new TextInputDialog("8");
-        countDialog.setTitle("Generer une rangee");
-        countDialog.setHeaderText("Creation de sieges");
-        countDialog.setContentText("Nombre de sieges :");
+        TextInputDialog rowsDialog = new TextInputDialog("2");
+        rowsDialog.setTitle("Generer des rangees");
+        rowsDialog.setHeaderText("Creation de plusieurs rangees");
+        rowsDialog.setContentText("Nombre de rangees :");
 
-        Optional<String> countAnswer = countDialog.showAndWait();
-        if (countAnswer.isEmpty()) {
+        Optional<String> rowCountAnswer = rowsDialog.showAndWait();
+        if (rowCountAnswer.isEmpty()) {
             return;
         }
 
-        int seatCount;
+        TextInputDialog seatsDialog = new TextInputDialog("8");
+        seatsDialog.setTitle("Generer des rangees");
+        seatsDialog.setHeaderText("Creation de plusieurs rangees");
+        seatsDialog.setContentText("Sieges par rangee :");
+
+        Optional<String> seatsPerRowAnswer = seatsDialog.showAndWait();
+        if (seatsPerRowAnswer.isEmpty()) {
+            return;
+        }
+
+        int rowCount;
+        int seatsPerRow;
         try {
-            seatCount = Integer.parseInt(countAnswer.get().trim());
+            rowCount = Integer.parseInt(rowCountAnswer.get().trim());
+            seatsPerRow = Integer.parseInt(seatsPerRowAnswer.get().trim());
         } catch (NumberFormatException e) {
-            showResult(false, "Le nombre de sieges doit etre un entier.");
+            showResult(false, "Les valeurs de generation doivent etre des entiers.");
             return;
         }
 
-        PurchaseOperationResult result = TicketCatalogDAO.generateSeatsForRow(ticketId, rowAnswer.get(), seatCount);
+        PurchaseOperationResult result = TicketCatalogDAO.generateSeatRows(ticketId, startRowAnswer.get(), rowCount, seatsPerRow);
         showResult(result.success(), result.message());
         if (result.success()) {
             refreshAdminView();

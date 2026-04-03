@@ -898,6 +898,65 @@ public class TicketCatalogDAO {
         }
     }
 
+    public static PurchaseOperationResult generateSeatRows(int ticketId, String startRowLabel, int rowCount, int seatsPerRow) {
+        if (startRowLabel == null || startRowLabel.isBlank()) {
+            return PurchaseOperationResult.failure("La lettre de depart est obligatoire.");
+        }
+        if (rowCount <= 0) {
+            return PurchaseOperationResult.failure("Le nombre de rangees doit etre superieur a 0.");
+        }
+        if (seatsPerRow <= 0) {
+            return PurchaseOperationResult.failure("Le nombre de sieges par rangee doit etre superieur a 0.");
+        }
+
+        String normalizedStart = startRowLabel.trim().toUpperCase();
+        char startChar = normalizedStart.charAt(0);
+        if (!Character.isLetter(startChar)) {
+            return PurchaseOperationResult.failure("La lettre de depart doit etre alphabetique.");
+        }
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                ensurePurchaseArtifactsSchema(conn);
+
+                for (int rowOffset = 0; rowOffset < rowCount; rowOffset++) {
+                    String rowLabel = String.valueOf((char) (startChar + rowOffset));
+                    int nextSeatNumber = getNextSeatNumberForRow(conn, ticketId, rowLabel);
+
+                    try (PreparedStatement pst = conn.prepareStatement(
+                            "INSERT INTO seats (ticket_id, seat_row, seat_number, is_taken) VALUES (?, ?, ?, 0)")) {
+                        for (int seatOffset = 0; seatOffset < seatsPerRow; seatOffset++) {
+                            pst.setInt(1, ticketId);
+                            pst.setString(2, rowLabel);
+                            pst.setInt(3, nextSeatNumber + seatOffset);
+                            pst.addBatch();
+                        }
+                        pst.executeBatch();
+                    }
+                }
+
+                PurchaseOperationResult syncResult = alignTicketStockWithSeatsTransactional(conn, ticketId);
+                if (!syncResult.success()) {
+                    conn.rollback();
+                    return syncResult;
+                }
+
+                conn.commit();
+                return PurchaseOperationResult.success("Generation de " + rowCount + " rangee(s) a partir de " + normalizedStart + " terminee.");
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur generateSeatRows()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Impossible de generer les rangees.");
+        }
+    }
+
     public static PurchaseOperationResult alignAllTicketStocksWithSeats() {
         String sql = """
                 UPDATE tickets t
@@ -1543,6 +1602,17 @@ public class TicketCatalogDAO {
                 return PurchaseOperationResult.failure("Aucun plan de salle a aligner pour cet evenement.");
             }
             return PurchaseOperationResult.success("Stock aligne sur le nombre reel de sieges libres.");
+        }
+    }
+
+    private static int getNextSeatNumberForRow(Connection conn, int ticketId, String rowLabel) throws SQLException {
+        String sql = "SELECT COALESCE(MAX(seat_number), 0) FROM seats WHERE ticket_id = ? AND seat_row = ?";
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, ticketId);
+            pst.setString(2, rowLabel);
+            try (ResultSet rs = pst.executeQuery()) {
+                return rs.next() ? rs.getInt(1) + 1 : 1;
+            }
         }
     }
 
