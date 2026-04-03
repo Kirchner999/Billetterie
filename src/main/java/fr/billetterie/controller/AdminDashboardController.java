@@ -23,8 +23,12 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 
+import java.awt.Desktop;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 public class AdminDashboardController {
@@ -51,10 +55,12 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseTotal;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseStatus;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseDate;
+    @FXML private TextField purchaseSearchField;
     @FXML private Button purchasesFilterAllButton;
     @FXML private Button purchasesFilterConfirmedButton;
     @FXML private Button purchasesFilterCancelledButton;
     @FXML private Button purchasesFilterRefundedButton;
+    @FXML private Button openPdfButton;
 
     @FXML private Label detailUsernameLabel;
     @FXML private Label detailEventLabel;
@@ -87,6 +93,7 @@ public class AdminDashboardController {
     private int selectedTicketId;
     private int selectedPurchaseId;
     private String purchaseFilterMode = "all";
+    private String purchaseSearchText = "";
 
     @FXML
     public void initialize() {
@@ -246,6 +253,26 @@ public class AdminDashboardController {
         refreshPurchases();
     }
 
+    @FXML
+    public void applyPurchaseSearch() {
+        purchaseSearchText = purchaseSearchField != null ? purchaseSearchField.getText() : "";
+        refreshPurchases();
+    }
+
+    @FXML
+    public void openSelectedPurchasePdf() {
+        AdminPurchaseRecord purchase = purchasesTable != null ? purchasesTable.getSelectionModel().getSelectedItem() : null;
+        if (purchase == null) {
+            showResult(false, "Selectionne un achat avec un billet PDF.");
+            return;
+        }
+        if (purchase.pdfPath() == null || purchase.pdfPath().isBlank()) {
+            showResult(false, "Aucun PDF enregistre pour cet achat.");
+            return;
+        }
+        openPdfPath(Path.of(purchase.pdfPath()));
+    }
+
     private void refreshAdminView() {
         int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
 
@@ -291,6 +318,9 @@ public class AdminDashboardController {
             selectedPurchaseId = newValue != null ? newValue.purchaseId() : 0;
             showPurchaseDetails(newValue);
         });
+        if (purchaseSearchField != null) {
+            purchaseSearchField.setOnAction(event -> applyPurchaseSearch());
+        }
     }
 
     private void configureAuditTable() {
@@ -321,6 +351,7 @@ public class AdminDashboardController {
                     case "refunded" -> "REFUNDED".equalsIgnoreCase(purchase.status());
                     default -> true;
                 })
+                .filter(purchase -> matchesPurchaseSearch(purchase, purchaseSearchText))
                 .toList();
         purchasesTable.setItems(FXCollections.observableArrayList(purchases));
         updatePurchaseFilterButtons();
@@ -364,6 +395,9 @@ public class AdminDashboardController {
             detailRefundDateLabel.setText("-");
             detailPdfLabel.setText("-");
             purchaseAuditTable.setItems(FXCollections.observableArrayList());
+            if (openPdfButton != null) {
+                openPdfButton.setDisable(true);
+            }
             return;
         }
 
@@ -377,5 +411,38 @@ public class AdminDashboardController {
         detailRefundDateLabel.setText(purchase.refundedAt() != null ? DATE_FORMAT.format(purchase.refundedAt()) : "-");
         detailPdfLabel.setText(purchase.pdfPath() != null && !purchase.pdfPath().isBlank() ? purchase.pdfPath() : "-");
         purchaseAuditTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getTicketEventsForPurchase(purchase.purchaseId())));
+        if (openPdfButton != null) {
+            openPdfButton.setDisable(purchase.pdfPath() == null || purchase.pdfPath().isBlank());
+        }
+    }
+
+    private boolean matchesPurchaseSearch(AdminPurchaseRecord purchase, String searchText) {
+        if (searchText == null || searchText.isBlank()) {
+            return true;
+        }
+        String query = searchText.trim().toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(purchase.username(), query)
+                || containsIgnoreCase(purchase.eventName(), query)
+                || containsIgnoreCase(purchase.ticketNumber(), query);
+    }
+
+    private boolean containsIgnoreCase(String value, String query) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(query);
+    }
+
+    private void openPdfPath(Path filePath) {
+        try {
+            if (Desktop.isDesktopSupported() && Files.exists(filePath)) {
+                Desktop.getDesktop().open(filePath.toFile());
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+
+        Alert alert = new Alert(Alert.AlertType.WARNING,
+                "Impossible d'ouvrir automatiquement le fichier.\nChemin: " + filePath);
+        alert.setTitle("Ouverture du billet");
+        alert.setHeaderText("Le fichier existe peut-etre mais n'a pas pu etre ouvert");
+        alert.showAndWait();
     }
 }

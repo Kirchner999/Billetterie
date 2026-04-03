@@ -118,6 +118,11 @@
                         <Button fx:id="purchasesFilterRefundedButton" text="Rembourses" styleClass="button-secondary" onAction="#showRefundedPurchases"/>
                     </HBox>
 
+                    <HBox spacing="10">
+                        <TextField fx:id="purchaseSearchField" promptText="Rechercher par utilisateur, billet ou spectacle" HBox.hgrow="ALWAYS"/>
+                        <Button text="Chercher" onAction="#applyPurchaseSearch"/>
+                    </HBox>
+
                     <TableView fx:id="purchasesTable" prefHeight="240" styleClass="data-table">
                         <columns>
                             <TableColumn fx:id="colPurchaseUser" text="Utilisateur" prefWidth="140"/>
@@ -178,6 +183,10 @@
                         <Label text="PDF" styleClass="stat-title"/>
                         <Label fx:id="detailPdfLabel" text="-" styleClass="section-subtitle" wrapText="true"/>
                     </VBox>
+
+                    <HBox spacing="12">
+                        <Button fx:id="openPdfButton" text="Ouvrir le PDF" styleClass="button-secondary" onAction="#openSelectedPurchasePdf" disable="true"/>
+                    </HBox>
 
                     <TableView fx:id="purchaseAuditTable" prefHeight="180" styleClass="data-table">
                         <columns>
