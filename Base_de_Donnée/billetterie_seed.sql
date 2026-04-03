@@ -4,6 +4,27 @@ ALTER TABLE purchases ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(120) NULL;
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(500) NULL;
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS seat_labels VARCHAR(255) NULL;
 
+CREATE TABLE IF NOT EXISTS ticket_files (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    purchase_id INT NOT NULL,
+    ticket_number VARCHAR(120) NOT NULL,
+    pdf_path VARCHAR(500) NOT NULL,
+    generated_at DATETIME NOT NULL,
+    UNIQUE KEY uk_ticket_files_purchase (purchase_id),
+    CONSTRAINT fk_ticket_files_purchase
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS purchase_seats (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    purchase_id INT NOT NULL,
+    seat_label VARCHAR(30) NOT NULL,
+    CONSTRAINT fk_purchase_seats_purchase
+        FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+        ON DELETE CASCADE
+);
+
 INSERT INTO tickets (event_name, event_date, price, stock) VALUES
 ('Les Miserables - Grand Rex', '2026-05-14 20:00:00', 79.90, 12),
 ('Romeo et Juliette - Theatre Mogador', '2026-05-21 20:30:00', 69.00, 16),

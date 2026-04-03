@@ -125,7 +125,7 @@ public class TicketCatalogDAO {
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                ensurePurchaseReceiptColumns(conn);
+                ensurePurchaseArtifactsSchema(conn);
                 try (PreparedStatement pst = conn.prepareStatement(deletePurchasesSql)) {
                     pst.setInt(1, ticketId);
                     pst.executeUpdate();
@@ -182,15 +182,31 @@ public class TicketCatalogDAO {
     public static List<Purchase> getPurchasesByUser(int userId) {
         List<Purchase> purchases = new ArrayList<>();
         String sql = """
-                SELECT p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, p.ticket_number, p.pdf_path, p.seat_labels
+                SELECT
+                    p.id,
+                    p.user_id,
+                    p.ticket_id,
+                    t.event_name,
+                    p.quantity,
+                    p.total,
+                    p.purchase_date,
+                    COALESCE(tf.ticket_number, p.ticket_number) AS resolved_ticket_number,
+                    COALESCE(tf.pdf_path, p.pdf_path) AS resolved_pdf_path,
+                    COALESCE(
+                        NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), ''),
+                        p.seat_labels
+                    ) AS resolved_seat_labels
                 FROM purchases p
                 JOIN tickets t ON t.id = p.ticket_id
+                LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
+                LEFT JOIN purchase_seats ps ON ps.purchase_id = p.id
                 WHERE p.user_id = ?
+                GROUP BY p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, tf.pdf_path, p.ticket_number, p.pdf_path, p.seat_labels
                 ORDER BY p.purchase_date DESC
                 """;
 
         try (Connection conn = Database.getConnection()) {
-            ensurePurchaseReceiptColumns(conn);
+            ensurePurchaseArtifactsSchema(conn);
             try (PreparedStatement pst = conn.prepareStatement(sql)) {
                 pst.setInt(1, userId);
                 try (ResultSet rs = pst.executeQuery()) {
@@ -203,9 +219,9 @@ public class TicketCatalogDAO {
                                 rs.getInt("quantity"),
                                 rs.getBigDecimal("total"),
                                 rs.getTimestamp("purchase_date").toLocalDateTime(),
-                                rs.getString("ticket_number"),
-                                rs.getString("pdf_path"),
-                                rs.getString("seat_labels")
+                                rs.getString("resolved_ticket_number"),
+                                rs.getString("resolved_pdf_path"),
+                                rs.getString("resolved_seat_labels")
                         ));
                     }
                 }
@@ -226,7 +242,7 @@ public class TicketCatalogDAO {
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                ensurePurchaseReceiptColumns(conn);
+                ensurePurchaseArtifactsSchema(conn);
 
                 String eventName;
                 BigDecimal price;
@@ -313,15 +329,61 @@ public class TicketCatalogDAO {
     }
 
     public static boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels) {
-        String sql = "UPDATE purchases SET ticket_number = ?, pdf_path = ?, seat_labels = ? WHERE id = ?";
+        String purchaseSql = "UPDATE purchases SET ticket_number = ?, pdf_path = ?, seat_labels = ? WHERE id = ?";
+        String upsertFileSql = """
+                INSERT INTO ticket_files (purchase_id, ticket_number, pdf_path, generated_at)
+                VALUES (?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    ticket_number = VALUES(ticket_number),
+                    pdf_path = VALUES(pdf_path),
+                    generated_at = NOW()
+                """;
+        String deleteSeatsSql = "DELETE FROM purchase_seats WHERE purchase_id = ?";
+        String insertSeatSql = "INSERT INTO purchase_seats (purchase_id, seat_label) VALUES (?, ?)";
         try (Connection conn = Database.getConnection()) {
-            ensurePurchaseReceiptColumns(conn);
-            try (PreparedStatement pst = conn.prepareStatement(sql)) {
-                pst.setString(1, ticketNumber);
-                pst.setString(2, pdfPath);
-                pst.setString(3, seatLabels);
-                pst.setInt(4, purchaseId);
-                return pst.executeUpdate() > 0;
+            conn.setAutoCommit(false);
+            ensurePurchaseArtifactsSchema(conn);
+            try {
+                boolean updated;
+                try (PreparedStatement pst = conn.prepareStatement(purchaseSql)) {
+                    pst.setString(1, ticketNumber);
+                    pst.setString(2, pdfPath);
+                    pst.setString(3, seatLabels);
+                    pst.setInt(4, purchaseId);
+                    updated = pst.executeUpdate() > 0;
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(upsertFileSql)) {
+                    pst.setInt(1, purchaseId);
+                    pst.setString(2, ticketNumber);
+                    pst.setString(3, pdfPath);
+                    pst.executeUpdate();
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(deleteSeatsSql)) {
+                    pst.setInt(1, purchaseId);
+                    pst.executeUpdate();
+                }
+
+                List<String> seatEntries = parseSeatLabels(seatLabels);
+                if (!seatEntries.isEmpty()) {
+                    try (PreparedStatement pst = conn.prepareStatement(insertSeatSql)) {
+                        for (String seatLabel : seatEntries) {
+                            pst.setInt(1, purchaseId);
+                            pst.setString(2, seatLabel);
+                            pst.addBatch();
+                        }
+                        pst.executeBatch();
+                    }
+                }
+
+                conn.commit();
+                return updated;
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         } catch (Exception e) {
             System.out.println("Erreur saveReceiptDocument()");
@@ -339,7 +401,7 @@ public class TicketCatalogDAO {
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                ensurePurchaseReceiptColumns(conn);
+                ensurePurchaseArtifactsSchema(conn);
                 List<Integer> expiredIds = new ArrayList<>();
                 try (PreparedStatement pst = conn.prepareStatement(expiredIdsSql);
                      ResultSet rs = pst.executeQuery()) {
@@ -396,7 +458,7 @@ public class TicketCatalogDAO {
         );
     }
 
-    private static void ensurePurchaseReceiptColumns(Connection conn) throws SQLException {
+    private static void ensurePurchaseArtifactsSchema(Connection conn) throws SQLException {
         if (!columnExists(conn, "purchases", "ticket_number")) {
             try (Statement st = conn.createStatement()) {
                 st.executeUpdate("ALTER TABLE purchases ADD COLUMN ticket_number VARCHAR(120) NULL");
@@ -412,6 +474,41 @@ public class TicketCatalogDAO {
                 st.executeUpdate("ALTER TABLE purchases ADD COLUMN seat_labels VARCHAR(255) NULL");
             }
         }
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS ticket_files (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        purchase_id INT NOT NULL,
+                        ticket_number VARCHAR(120) NOT NULL,
+                        pdf_path VARCHAR(500) NOT NULL,
+                        generated_at DATETIME NOT NULL,
+                        UNIQUE KEY uk_ticket_files_purchase (purchase_id),
+                        CONSTRAINT fk_ticket_files_purchase
+                            FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+                            ON DELETE CASCADE
+                    )
+                    """);
+            st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS purchase_seats (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        purchase_id INT NOT NULL,
+                        seat_label VARCHAR(30) NOT NULL,
+                        CONSTRAINT fk_purchase_seats_purchase
+                            FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+                            ON DELETE CASCADE
+                    )
+                    """);
+        }
+    }
+
+    private static List<String> parseSeatLabels(String seatLabels) {
+        if (seatLabels == null || seatLabels.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(seatLabels.split(","))
+                .map(String::trim)
+                .filter(label -> !label.isBlank())
+                .toList();
     }
 
     private static boolean columnExists(Connection conn, String tableName, String columnName) throws SQLException {
