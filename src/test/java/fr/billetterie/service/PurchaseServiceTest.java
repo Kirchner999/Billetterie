@@ -62,7 +62,7 @@ class PurchaseServiceTest {
     void purchaseWithSeatsDelegatesSelectedSeatIds() {
         StubTicketStoreRepository repository = new StubTicketStoreRepository();
         PurchaseService service = new PurchaseService(repository);
-        List<Seat> seats = List.of(new Seat(11, "A", 1), new Seat(12, "A", 2));
+        List<Seat> seats = java.util.Arrays.asList(new Seat(11, "A", 1, false), new Seat(12, "A", 2, false));
 
         PurchaseOperationResult result = service.purchaseWithSeats(new Client(4, "bob", "secret", "user"), 9, seats);
 

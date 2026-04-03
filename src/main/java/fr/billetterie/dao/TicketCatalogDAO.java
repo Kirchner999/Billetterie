@@ -47,7 +47,7 @@ public class TicketCatalogDAO {
 
     public static List<Seat> getAvailableSeats(int ticketId) {
         List<Seat> seats = new ArrayList<>();
-        String sql = "SELECT id, seat_row, seat_number FROM seats WHERE ticket_id = ? AND is_taken = 0 ORDER BY seat_row, seat_number";
+        String sql = "SELECT id, seat_row, seat_number, is_taken FROM seats WHERE ticket_id = ? ORDER BY seat_row, seat_number";
 
         try (Connection conn = Database.getConnection();
              PreparedStatement pst = conn.prepareStatement(sql)) {
@@ -58,7 +58,8 @@ public class TicketCatalogDAO {
                     seats.add(new Seat(
                             rs.getInt("id"),
                             rs.getString("seat_row"),
-                            rs.getInt("seat_number")
+                            rs.getInt("seat_number"),
+                            rs.getBoolean("is_taken")
                     ));
                 }
             }

@@ -28,11 +28,13 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
+import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class ClientDashboardController {
 
@@ -125,30 +127,51 @@ public class ClientDashboardController {
     }
 
     private void handlePurchase(Ticket ticket) {
-        List<Seat> availableSeats = ticketStoreRepository.getAvailableSeats(ticket.id());
+        List<Seat> seats = ticketStoreRepository.getAvailableSeats(ticket.id());
         PurchaseOperationResult purchaseResult;
 
-        if (!availableSeats.isEmpty()) {
-            List<Seat> selectedSeats = askSeatSelection(ticket, availableSeats);
+        if (!seats.isEmpty()) {
+            List<Seat> selectedSeats = askSeatSelection(ticket, seats);
             if (selectedSeats == null) {
                 return;
             }
+
+            if (!confirmSeatPurchase(ticket, selectedSeats)) {
+                return;
+            }
+
             purchaseResult = purchaseService.purchaseWithSeats(App.getCurrentUser(), ticket.id(), selectedSeats);
         } else {
             Optional<String> quantity = askQuantity(ticket);
             if (quantity.isEmpty()) {
                 return;
             }
+
+            int qty;
+            try {
+                qty = Integer.parseInt(quantity.get().trim());
+            } catch (Exception e) {
+                showPurchaseAlert(PurchaseOperationResult.failure("La quantite doit etre un nombre entier."));
+                return;
+            }
+
+            if (!confirmQuantityPurchase(ticket, qty)) {
+                return;
+            }
+
             purchaseResult = purchaseService.purchaseWithoutSeats(App.getCurrentUser(), ticket.id(), quantity.get());
         }
 
-        Alert.AlertType type = purchaseResult.success() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
-        Alert alert = new Alert(type, purchaseResult.message());
-        alert.showAndWait();
-
+        showPurchaseAlert(purchaseResult);
         if (purchaseResult.success()) {
             showSpectacles();
         }
+    }
+
+    private void showPurchaseAlert(PurchaseOperationResult purchaseResult) {
+        Alert.AlertType type = purchaseResult.success() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
+        Alert alert = new Alert(type, purchaseResult.message());
+        alert.showAndWait();
     }
 
     private Optional<String> askQuantity(Ticket ticket) {
@@ -167,7 +190,7 @@ public class ClientDashboardController {
         VBox wrapper = new VBox(12);
         wrapper.setPadding(new Insets(10));
 
-        Label instructions = new Label("Clique sur une ou plusieurs places disponibles.");
+        Label instructions = new Label("Les sieges grises sont deja pris. Clique sur les places libres.");
         instructions.getStyleClass().add("seat-instructions");
 
         FlowPane grid = new FlowPane();
@@ -183,6 +206,10 @@ public class ClientDashboardController {
         for (Seat seat : sortedSeats) {
             ToggleButton seatButton = new ToggleButton(seat.displayLabel());
             seatButton.getStyleClass().add("seat-button");
+            if (seat.taken()) {
+                seatButton.getStyleClass().add("seat-button-taken");
+                seatButton.setDisable(true);
+            }
             seatButton.setUserData(seat);
             seatButton.setMinWidth(68);
             seatButton.setPrefWidth(68);
@@ -192,7 +219,8 @@ public class ClientDashboardController {
 
         HBox legend = new HBox(10,
                 buildLegendChip("Libre", "seat-button"),
-                buildLegendChip("Selectionne", "seat-button", "selected")
+                buildLegendChip("Selectionne", "seat-button", "selected"),
+                buildLegendChip("Pris", "seat-button", "seat-button-taken")
         );
 
         wrapper.getChildren().addAll(instructions, legend, grid);
@@ -201,7 +229,7 @@ public class ClientDashboardController {
         dialog.setResultConverter(buttonType -> {
             if (buttonType == ButtonType.OK) {
                 return buttons.stream()
-                        .filter(ToggleButton::isSelected)
+                        .filter(button -> button.isSelected() && !button.isDisable())
                         .map(button -> (Seat) button.getUserData())
                         .toList();
             }
@@ -209,6 +237,44 @@ public class ClientDashboardController {
         });
 
         return dialog.showAndWait().orElse(null);
+    }
+
+    private boolean confirmSeatPurchase(Ticket ticket, List<Seat> selectedSeats) {
+        String seatsLabel = selectedSeats.stream().map(Seat::displayLabel).collect(Collectors.joining(", "));
+        BigDecimal total = ticket.price().multiply(BigDecimal.valueOf(selectedSeats.size()));
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Confirmation d'achat");
+        confirm.setHeaderText("Verifier le recapitulatif avant validation");
+        confirm.setContentText(
+                "Evenement: " + ticket.eventName() + "\n" +
+                "Date: " + DATE_FORMAT.format(ticket.eventDate()) + "\n" +
+                "Sieges: " + seatsLabel + "\n" +
+                "Quantite: " + selectedSeats.size() + "\n" +
+                "Total: " + total + " EUR"
+        );
+
+        return confirm.showAndWait().filter(ButtonType.OK::equals).isPresent();
+    }
+
+    private boolean confirmQuantityPurchase(Ticket ticket, int quantity) {
+        if (quantity <= 0) {
+            showPurchaseAlert(PurchaseOperationResult.failure("La quantite doit etre superieure a 0."));
+            return false;
+        }
+
+        BigDecimal total = ticket.price().multiply(BigDecimal.valueOf(quantity));
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Confirmation d'achat");
+        confirm.setHeaderText("Verifier le recapitulatif avant validation");
+        confirm.setContentText(
+                "Evenement: " + ticket.eventName() + "\n" +
+                "Date: " + DATE_FORMAT.format(ticket.eventDate()) + "\n" +
+                "Quantite: " + quantity + "\n" +
+                "Total: " + total + " EUR"
+        );
+
+        return confirm.showAndWait().filter(ButtonType.OK::equals).isPresent();
     }
 
     private Label buildLegendChip(String text, String... styleClasses) {

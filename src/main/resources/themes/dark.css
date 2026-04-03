@@ -86,3 +86,12 @@
     -fx-text-fill: white;
     -fx-border-color: #86a9ff;
 }
+
+.seat-button-taken,
+.seat-button:disabled,
+.label.seat-button.seat-button-taken {
+    -fx-background-color: #424242;
+    -fx-text-fill: #9a9a9a;
+    -fx-border-color: #5c5c5c;
+    -fx-opacity: 1;
+}
