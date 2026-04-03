@@ -190,18 +190,15 @@ public class TicketCatalogDAO {
                     p.quantity,
                     p.total,
                     p.purchase_date,
-                    COALESCE(tf.ticket_number, p.ticket_number) AS resolved_ticket_number,
-                    COALESCE(tf.pdf_path, p.pdf_path) AS resolved_pdf_path,
-                    COALESCE(
-                        NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), ''),
-                        p.seat_labels
-                    ) AS resolved_seat_labels
+                    tf.ticket_number AS resolved_ticket_number,
+                    tf.pdf_path AS resolved_pdf_path,
+                    NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), '') AS resolved_seat_labels
                 FROM purchases p
                 JOIN tickets t ON t.id = p.ticket_id
                 LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
                 LEFT JOIN purchase_seats ps ON ps.purchase_id = p.id
                 WHERE p.user_id = ?
-                GROUP BY p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, tf.pdf_path, p.ticket_number, p.pdf_path, p.seat_labels
+                GROUP BY p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, tf.pdf_path
                 ORDER BY p.purchase_date DESC
                 """;
 
@@ -237,7 +234,7 @@ public class TicketCatalogDAO {
     public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
         String ticketSql = "SELECT event_name, price, stock FROM tickets WHERE id = ? FOR UPDATE";
         String stockUpdateSql = "UPDATE tickets SET stock = stock - ? WHERE id = ?";
-        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date, ticket_number, pdf_path, seat_labels) VALUES (?, ?, ?, ?, NOW(), NULL, NULL, NULL)";
+        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date) VALUES (?, ?, ?, ?, NOW())";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -329,7 +326,6 @@ public class TicketCatalogDAO {
     }
 
     public static boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels) {
-        String purchaseSql = "UPDATE purchases SET ticket_number = ?, pdf_path = ?, seat_labels = ? WHERE id = ?";
         String upsertFileSql = """
                 INSERT INTO ticket_files (purchase_id, ticket_number, pdf_path, generated_at)
                 VALUES (?, ?, ?, NOW())
@@ -344,15 +340,6 @@ public class TicketCatalogDAO {
             conn.setAutoCommit(false);
             ensurePurchaseArtifactsSchema(conn);
             try {
-                boolean updated;
-                try (PreparedStatement pst = conn.prepareStatement(purchaseSql)) {
-                    pst.setString(1, ticketNumber);
-                    pst.setString(2, pdfPath);
-                    pst.setString(3, seatLabels);
-                    pst.setInt(4, purchaseId);
-                    updated = pst.executeUpdate() > 0;
-                }
-
                 try (PreparedStatement pst = conn.prepareStatement(upsertFileSql)) {
                     pst.setInt(1, purchaseId);
                     pst.setString(2, ticketNumber);
@@ -378,7 +365,7 @@ public class TicketCatalogDAO {
                 }
 
                 conn.commit();
-                return updated;
+                return true;
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
@@ -459,21 +446,6 @@ public class TicketCatalogDAO {
     }
 
     private static void ensurePurchaseArtifactsSchema(Connection conn) throws SQLException {
-        if (!columnExists(conn, "purchases", "ticket_number")) {
-            try (Statement st = conn.createStatement()) {
-                st.executeUpdate("ALTER TABLE purchases ADD COLUMN ticket_number VARCHAR(120) NULL");
-            }
-        }
-        if (!columnExists(conn, "purchases", "pdf_path")) {
-            try (Statement st = conn.createStatement()) {
-                st.executeUpdate("ALTER TABLE purchases ADD COLUMN pdf_path VARCHAR(500) NULL");
-            }
-        }
-        if (!columnExists(conn, "purchases", "seat_labels")) {
-            try (Statement st = conn.createStatement()) {
-                st.executeUpdate("ALTER TABLE purchases ADD COLUMN seat_labels VARCHAR(255) NULL");
-            }
-        }
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS ticket_files (
@@ -498,6 +470,53 @@ public class TicketCatalogDAO {
                             ON DELETE CASCADE
                     )
                     """);
+        }
+        backfillLegacyPurchaseArtifacts(conn);
+    }
+
+    private static void backfillLegacyPurchaseArtifacts(Connection conn) throws SQLException {
+        if (columnExists(conn, "purchases", "ticket_number") && columnExists(conn, "purchases", "pdf_path")) {
+            try (Statement st = conn.createStatement()) {
+                st.executeUpdate("""
+                        INSERT INTO ticket_files (purchase_id, ticket_number, pdf_path, generated_at)
+                        SELECT p.id, p.ticket_number, p.pdf_path, COALESCE(p.purchase_date, NOW())
+                        FROM purchases p
+                        LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
+                        WHERE tf.id IS NULL
+                          AND p.ticket_number IS NOT NULL
+                          AND p.pdf_path IS NOT NULL
+                        """);
+            }
+        }
+
+        if (columnExists(conn, "purchases", "seat_labels")) {
+            String sql = """
+                    SELECT p.id, p.seat_labels
+                    FROM purchases p
+                    LEFT JOIN purchase_seats ps ON ps.purchase_id = p.id
+                    WHERE ps.id IS NULL
+                      AND p.seat_labels IS NOT NULL
+                      AND TRIM(p.seat_labels) <> ''
+                    """;
+
+            try (PreparedStatement pst = conn.prepareStatement(sql);
+                 ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    int purchaseId = rs.getInt("id");
+                    List<String> labels = parseSeatLabels(rs.getString("seat_labels"));
+                    if (labels.isEmpty()) {
+                        continue;
+                    }
+                    try (PreparedStatement insert = conn.prepareStatement("INSERT INTO purchase_seats (purchase_id, seat_label) VALUES (?, ?)")) {
+                        for (String label : labels) {
+                            insert.setInt(1, purchaseId);
+                            insert.setString(2, label);
+                            insert.addBatch();
+                        }
+                        insert.executeBatch();
+                    }
+                }
+            }
         }
     }
 
