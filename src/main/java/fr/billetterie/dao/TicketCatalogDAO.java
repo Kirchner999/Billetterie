@@ -494,6 +494,10 @@ public class TicketCatalogDAO {
     }
 
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {
+        return cancelPurchase(purchaseId, null);
+    }
+
+    public static PurchaseOperationResult cancelPurchase(int purchaseId, String reason) {
         String selectSql = """
                 SELECT p.ticket_id, p.quantity, COALESCE(p.status, 'CONFIRMED') AS purchase_status, t.event_name
                 FROM purchases p
@@ -557,7 +561,11 @@ public class TicketCatalogDAO {
                     pst.executeUpdate();
                 }
 
-                logTicketEvent(conn, purchaseId, "CANCELLED", "Achat annule depuis l'admin pour " + eventName);
+                String details = "Achat annule depuis l'admin pour " + eventName;
+                if (reason != null && !reason.isBlank()) {
+                    details += " | motif: " + reason.trim();
+                }
+                logTicketEvent(conn, purchaseId, "CANCELLED", details);
                 conn.commit();
                 return PurchaseOperationResult.success("Achat annule et stock remis a jour.", purchaseId);
             } catch (Exception e) {

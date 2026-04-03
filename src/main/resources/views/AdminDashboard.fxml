@@ -105,6 +105,12 @@
                     <Label text="Achats clients" styleClass="section-title"/>
                     <Label text="Selectionne un achat pour l'annuler proprement sans perdre l'historique." styleClass="section-subtitle" wrapText="true"/>
 
+                    <HBox spacing="10">
+                        <Button fx:id="purchasesFilterAllButton" text="Tous" styleClass="button-secondary" onAction="#showAllPurchases"/>
+                        <Button fx:id="purchasesFilterConfirmedButton" text="Confirmes" styleClass="button-secondary" onAction="#showConfirmedPurchases"/>
+                        <Button fx:id="purchasesFilterCancelledButton" text="Annules" styleClass="button-secondary" onAction="#showCancelledPurchases"/>
+                    </HBox>
+
                     <TableView fx:id="purchasesTable" prefHeight="240" styleClass="data-table">
                         <columns>
                             <TableColumn fx:id="colPurchaseUser" text="Utilisateur" prefWidth="140"/>

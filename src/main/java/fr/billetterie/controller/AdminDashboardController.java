@@ -16,13 +16,16 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 public class AdminDashboardController {
 
@@ -47,6 +50,9 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseTotal;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseStatus;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseDate;
+    @FXML private Button purchasesFilterAllButton;
+    @FXML private Button purchasesFilterConfirmedButton;
+    @FXML private Button purchasesFilterCancelledButton;
 
     @FXML private TableView<TicketEventLog> eventsLogTable;
     @FXML private TableColumn<TicketEventLog, String> colLogDate;
@@ -64,6 +70,7 @@ public class AdminDashboardController {
     private final EventManagementService eventManagementService = new EventManagementService(new DaoTicketAdminRepository());
     private int selectedTicketId;
     private int selectedPurchaseId;
+    private String purchaseFilterMode = "all";
 
     @FXML
     public void initialize() {
@@ -126,7 +133,17 @@ public class AdminDashboardController {
             return;
         }
 
-        PurchaseOperationResult result = TicketCatalogDAO.cancelPurchase(selectedPurchaseId);
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Motif d'annulation");
+        dialog.setHeaderText("Annulation admin");
+        dialog.setContentText("Motif :");
+
+        Optional<String> reason = dialog.showAndWait();
+        if (reason.isEmpty()) {
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.cancelPurchase(selectedPurchaseId, reason.get());
         showResult(result.success(), result.message());
         if (result.success()) {
             selectedPurchaseId = 0;
@@ -158,6 +175,24 @@ public class AdminDashboardController {
     public void logout() {
         App.setCurrentUser(null);
         App.loadPage("Login.fxml");
+    }
+
+    @FXML
+    public void showAllPurchases() {
+        purchaseFilterMode = "all";
+        refreshPurchases();
+    }
+
+    @FXML
+    public void showConfirmedPurchases() {
+        purchaseFilterMode = "confirmed";
+        refreshPurchases();
+    }
+
+    @FXML
+    public void showCancelledPurchases() {
+        purchaseFilterMode = "cancelled";
+        refreshPurchases();
     }
 
     private void refreshAdminView() {
@@ -220,8 +255,15 @@ public class AdminDashboardController {
     }
 
     private void refreshPurchases() {
-        List<AdminPurchaseRecord> purchases = TicketCatalogDAO.getAdminPurchases();
+        List<AdminPurchaseRecord> purchases = TicketCatalogDAO.getAdminPurchases().stream()
+                .filter(purchase -> switch (purchaseFilterMode) {
+                    case "confirmed" -> "CONFIRMED".equalsIgnoreCase(purchase.status());
+                    case "cancelled" -> "CANCELLED".equalsIgnoreCase(purchase.status());
+                    default -> true;
+                })
+                .toList();
         purchasesTable.setItems(FXCollections.observableArrayList(purchases));
+        updatePurchaseFilterButtons();
     }
 
     private void refreshAudit() {
@@ -233,5 +275,19 @@ public class AdminDashboardController {
         Alert.AlertType type = success ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
         Alert alert = new Alert(type, message);
         alert.showAndWait();
+    }
+
+    private void updatePurchaseFilterButtons() {
+        updateFilterButton(purchasesFilterAllButton, "all".equals(purchaseFilterMode));
+        updateFilterButton(purchasesFilterConfirmedButton, "confirmed".equals(purchaseFilterMode));
+        updateFilterButton(purchasesFilterCancelledButton, "cancelled".equals(purchaseFilterMode));
+    }
+
+    private void updateFilterButton(Button button, boolean active) {
+        if (button == null) {
+            return;
+        }
+        button.getStyleClass().removeAll("catalog-chip", "catalog-chip-active");
+        button.getStyleClass().add(active ? "catalog-chip-active" : "catalog-chip");
     }
 }
