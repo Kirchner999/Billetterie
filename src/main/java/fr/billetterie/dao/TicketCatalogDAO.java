@@ -4,6 +4,7 @@ import fr.billetterie.model.AdminPurchaseRecord;
 import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
+import fr.billetterie.model.AdminSeatConsistencyIssue;
 import fr.billetterie.model.AdminSeatOccupancyStat;
 import fr.billetterie.model.Purchase;
 import fr.billetterie.model.Seat;
@@ -768,6 +769,134 @@ public class TicketCatalogDAO {
         return stats;
     }
 
+    public static List<AdminSeatConsistencyIssue> getSeatConsistencyIssues() {
+        List<AdminSeatConsistencyIssue> issues = new ArrayList<>();
+        String sql = """
+                SELECT
+                    t.id,
+                    t.event_name,
+                    t.stock,
+                    COUNT(s.id) AS total_seats,
+                    COALESCE(SUM(CASE WHEN s.is_taken = 1 THEN 1 ELSE 0 END), 0) AS taken_seats
+                FROM tickets t
+                JOIN seats s ON s.ticket_id = t.id
+                GROUP BY t.id, t.event_name, t.stock
+                HAVING t.stock <> (COUNT(s.id) - COALESCE(SUM(CASE WHEN s.is_taken = 1 THEN 1 ELSE 0 END), 0))
+                ORDER BY ABS(t.stock - (COUNT(s.id) - COALESCE(SUM(CASE WHEN s.is_taken = 1 THEN 1 ELSE 0 END), 0))) DESC, t.event_name ASC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql);
+                 ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    int availableSeats = rs.getInt("total_seats") - rs.getInt("taken_seats");
+                    issues.add(new AdminSeatConsistencyIssue(
+                            rs.getInt("id"),
+                            rs.getString("event_name"),
+                            rs.getInt("stock"),
+                            availableSeats,
+                            rs.getInt("stock") - availableSeats
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getSeatConsistencyIssues()");
+            e.printStackTrace();
+        }
+
+        return issues;
+    }
+
+    public static PurchaseOperationResult alignTicketStockWithSeats(int ticketId) {
+        String sql = """
+                UPDATE tickets t
+                JOIN (
+                    SELECT
+                        ticket_id,
+                        COUNT(*) - COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS available_seats
+                    FROM seats
+                    WHERE ticket_id = ?
+                    GROUP BY ticket_id
+                ) seat_stats ON seat_stats.ticket_id = t.id
+                SET t.stock = seat_stats.available_seats
+                WHERE t.id = ?
+                """;
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            ensurePurchaseArtifactsSchema(conn);
+            pst.setInt(1, ticketId);
+            pst.setInt(2, ticketId);
+            int updated = pst.executeUpdate();
+            if (updated == 0) {
+                return PurchaseOperationResult.failure("Aucun plan de salle a aligner pour cet evenement.");
+            }
+            return PurchaseOperationResult.success("Stock aligne sur le nombre reel de sieges libres.");
+        } catch (Exception e) {
+            System.out.println("Erreur alignTicketStockWithSeats()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Impossible d'aligner le stock avec les sieges.");
+        }
+    }
+
+    public static PurchaseOperationResult generateSeatsForRow(int ticketId, String rowLabel, int seatCount) {
+        if (rowLabel == null || rowLabel.isBlank()) {
+            return PurchaseOperationResult.failure("Le nom de rangee est obligatoire.");
+        }
+        if (seatCount <= 0) {
+            return PurchaseOperationResult.failure("Le nombre de sieges doit etre superieur a 0.");
+        }
+
+        String maxSeatSql = "SELECT COALESCE(MAX(seat_number), 0) FROM seats WHERE ticket_id = ? AND seat_row = ?";
+        String insertSeatSql = "INSERT INTO seats (ticket_id, seat_row, seat_number, is_taken) VALUES (?, ?, ?, 0)";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                ensurePurchaseArtifactsSchema(conn);
+                String normalizedRow = rowLabel.trim().toUpperCase();
+                int startNumber;
+
+                try (PreparedStatement pst = conn.prepareStatement(maxSeatSql)) {
+                    pst.setInt(1, ticketId);
+                    pst.setString(2, normalizedRow);
+                    try (ResultSet rs = pst.executeQuery()) {
+                        startNumber = rs.next() ? rs.getInt(1) + 1 : 1;
+                    }
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(insertSeatSql)) {
+                    for (int i = 0; i < seatCount; i++) {
+                        pst.setInt(1, ticketId);
+                        pst.setString(2, normalizedRow);
+                        pst.setInt(3, startNumber + i);
+                        pst.addBatch();
+                    }
+                    pst.executeBatch();
+                }
+
+                PurchaseOperationResult syncResult = alignTicketStockWithSeatsTransactional(conn, ticketId);
+                if (!syncResult.success()) {
+                    conn.rollback();
+                    return syncResult;
+                }
+
+                conn.commit();
+                return PurchaseOperationResult.success("Rangee " + normalizedRow + " generee avec " + seatCount + " sieges.");
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur generateSeatsForRow()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Impossible de generer la rangee.");
+        }
+    }
+
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {
         return cancelPurchase(purchaseId, null);
     }
@@ -1198,6 +1327,32 @@ public class TicketCatalogDAO {
             buckets.put(start.plusDays(i), new RevenueBucket());
         }
         return buckets;
+    }
+
+    private static PurchaseOperationResult alignTicketStockWithSeatsTransactional(Connection conn, int ticketId) throws SQLException {
+        String sql = """
+                UPDATE tickets t
+                JOIN (
+                    SELECT
+                        ticket_id,
+                        COUNT(*) - COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS available_seats
+                    FROM seats
+                    WHERE ticket_id = ?
+                    GROUP BY ticket_id
+                ) seat_stats ON seat_stats.ticket_id = t.id
+                SET t.stock = seat_stats.available_seats
+                WHERE t.id = ?
+                """;
+
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, ticketId);
+            pst.setInt(2, ticketId);
+            int updated = pst.executeUpdate();
+            if (updated == 0) {
+                return PurchaseOperationResult.failure("Aucun plan de salle a aligner pour cet evenement.");
+            }
+            return PurchaseOperationResult.success("Stock aligne sur le nombre reel de sieges libres.");
+        }
     }
 
     private static Map<YearMonth, RevenueBucket> initMonthlyBuckets(int months) {

@@ -7,6 +7,7 @@ import fr.billetterie.model.AdminPurchaseRecord;
 import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
+import fr.billetterie.model.AdminSeatConsistencyIssue;
 import fr.billetterie.model.AdminSeatOccupancyStat;
 import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
@@ -61,6 +62,7 @@ public class AdminDashboardController {
     @FXML private Label cancelledCountLabel;
     @FXML private Label refundedCountLabel;
     @FXML private Label expiredCleanupLabel;
+    @FXML private Label seatMismatchCountLabel;
 
     @FXML private TableView<Ticket> eventsTable;
     @FXML private TableColumn<Ticket, String> colEventName;
@@ -75,6 +77,12 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminSeatOccupancyStat, Integer> colOccupancyTaken;
     @FXML private TableColumn<AdminSeatOccupancyStat, Integer> colOccupancyAvailable;
     @FXML private TableColumn<AdminSeatOccupancyStat, String> colOccupancyRate;
+    @FXML private Label consistencySummaryLabel;
+    @FXML private TableView<AdminSeatConsistencyIssue> consistencyTable;
+    @FXML private TableColumn<AdminSeatConsistencyIssue, String> colConsistencyEvent;
+    @FXML private TableColumn<AdminSeatConsistencyIssue, Integer> colConsistencyStock;
+    @FXML private TableColumn<AdminSeatConsistencyIssue, Integer> colConsistencyAvailable;
+    @FXML private TableColumn<AdminSeatConsistencyIssue, Integer> colConsistencyDelta;
     @FXML private TableView<AdminRowOccupancyStat> rowOccupancyTable;
     @FXML private TableColumn<AdminRowOccupancyStat, String> colRowLabel;
     @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowTotal;
@@ -220,6 +228,64 @@ public class AdminDashboardController {
         showResult(result.success(), result.message());
         if (result.success()) {
             resetForm();
+            refreshAdminView();
+        }
+    }
+
+    @FXML
+    public void alignSelectedSeatStock() {
+        int ticketId = resolveSelectedTicketId();
+        if (ticketId == 0) {
+            showResult(false, "Selectionne un spectacle dans la gestion ou l'occupation.");
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.alignTicketStockWithSeats(ticketId);
+        showResult(result.success(), result.message());
+        if (result.success()) {
+            refreshAdminView();
+        }
+    }
+
+    @FXML
+    public void generateSeatsForSelectedEvent() {
+        int ticketId = resolveSelectedTicketId();
+        if (ticketId == 0) {
+            showResult(false, "Selectionne un spectacle dans la gestion ou l'occupation.");
+            return;
+        }
+
+        TextInputDialog rowDialog = new TextInputDialog();
+        rowDialog.setTitle("Generer une rangee");
+        rowDialog.setHeaderText("Creation de sieges");
+        rowDialog.setContentText("Nom de la rangee :");
+
+        Optional<String> rowAnswer = rowDialog.showAndWait();
+        if (rowAnswer.isEmpty()) {
+            return;
+        }
+
+        TextInputDialog countDialog = new TextInputDialog("8");
+        countDialog.setTitle("Generer une rangee");
+        countDialog.setHeaderText("Creation de sieges");
+        countDialog.setContentText("Nombre de sieges :");
+
+        Optional<String> countAnswer = countDialog.showAndWait();
+        if (countAnswer.isEmpty()) {
+            return;
+        }
+
+        int seatCount;
+        try {
+            seatCount = Integer.parseInt(countAnswer.get().trim());
+        } catch (NumberFormatException e) {
+            showResult(false, "Le nombre de sieges doit etre un entier.");
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.generateSeatsForRow(ticketId, rowAnswer.get(), seatCount);
+        showResult(result.success(), result.message());
+        if (result.success()) {
             refreshAdminView();
         }
     }
@@ -573,6 +639,9 @@ public class AdminDashboardController {
         cancelledCountLabel.setText(String.valueOf(TicketCatalogDAO.countCancelledPurchases()));
         refundedCountLabel.setText(String.valueOf(TicketCatalogDAO.countRefundedPurchases()));
         expiredCleanupLabel.setText(String.valueOf(deletedExpired));
+        if (seatMismatchCountLabel != null) {
+            seatMismatchCountLabel.setText(String.valueOf(TicketCatalogDAO.getSeatConsistencyIssues().size()));
+        }
 
         refreshEvents();
         refreshPurchases();
@@ -609,6 +678,7 @@ public class AdminDashboardController {
             colOccupancyRate.setCellValueFactory(cell -> new SimpleStringProperty(formatPercent(cell.getValue().occupancyRate())));
             occupancyTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
                 if (newValue != null) {
+                    selectedTicketId = newValue.ticketId();
                     refreshRowOccupancy(newValue.ticketId(), newValue.eventName());
                 }
             });
@@ -620,6 +690,18 @@ public class AdminDashboardController {
             colRowTaken.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().takenSeats()));
             colRowAvailable.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().availableSeats()));
             colRowRate.setCellValueFactory(cell -> new SimpleStringProperty(formatPercent(cell.getValue().occupancyRate())));
+        }
+
+        if (consistencyTable != null) {
+            colConsistencyEvent.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+            colConsistencyStock.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().stock()));
+            colConsistencyAvailable.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().availableSeats()));
+            colConsistencyDelta.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().difference()));
+            consistencyTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+                if (newValue != null) {
+                    selectTicketInContext(newValue.ticketId());
+                }
+            });
         }
 
         if (seatHeatmapLegend != null && seatHeatmapLegend.getChildren().isEmpty()) {
@@ -722,6 +804,7 @@ public class AdminDashboardController {
         int takenSeats = stats.stream().mapToInt(AdminSeatOccupancyStat::takenSeats).sum();
         int availableSeats = stats.stream().mapToInt(AdminSeatOccupancyStat::availableSeats).sum();
         occupancySummaryLabel.setText("Total: " + totalSeats + " | Pris: " + takenSeats + " | Libres: " + availableSeats);
+        refreshConsistencyIssues();
 
         AdminSeatOccupancyStat selected = occupancyTable.getSelectionModel().getSelectedItem();
         if (selected != null) {
@@ -751,6 +834,19 @@ public class AdminDashboardController {
         occupancySelectedEventLabel.setText(eventName != null ? eventName : "-");
         rowOccupancyTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getRowOccupancyStats(ticketId)));
         renderSeatHeatmap(TicketCatalogDAO.getAvailableSeats(ticketId));
+    }
+
+    private void refreshConsistencyIssues() {
+        if (consistencyTable == null) {
+            return;
+        }
+        List<AdminSeatConsistencyIssue> issues = TicketCatalogDAO.getSeatConsistencyIssues();
+        consistencyTable.setItems(FXCollections.observableArrayList(issues));
+        if (consistencySummaryLabel != null) {
+            consistencySummaryLabel.setText(issues.isEmpty()
+                    ? "Aucune incoherence detectee entre le stock et les sieges libres."
+                    : issues.size() + " evenement(s) a corriger.");
+        }
     }
 
     private void showResult(boolean success, String message) {
@@ -890,6 +986,42 @@ public class AdminDashboardController {
 
     private String formatPercent(double value) {
         return String.format(Locale.ROOT, "%.1f %%", value);
+    }
+
+    private int resolveSelectedTicketId() {
+        if (selectedTicketId > 0) {
+            return selectedTicketId;
+        }
+        AdminSeatOccupancyStat occupancy = occupancyTable != null ? occupancyTable.getSelectionModel().getSelectedItem() : null;
+        if (occupancy != null) {
+            return occupancy.ticketId();
+        }
+        AdminSeatConsistencyIssue issue = consistencyTable != null ? consistencyTable.getSelectionModel().getSelectedItem() : null;
+        if (issue != null) {
+            return issue.ticketId();
+        }
+        return 0;
+    }
+
+    private void selectTicketInContext(int ticketId) {
+        if (ticketId <= 0) {
+            return;
+        }
+        selectedTicketId = ticketId;
+
+        if (eventsTable != null) {
+            eventsTable.getItems().stream()
+                    .filter(ticket -> ticket.id() == ticketId)
+                    .findFirst()
+                    .ifPresent(ticket -> eventsTable.getSelectionModel().select(ticket));
+        }
+
+        if (occupancyTable != null) {
+            occupancyTable.getItems().stream()
+                    .filter(stat -> stat.ticketId() == ticketId)
+                    .findFirst()
+                    .ifPresent(stat -> occupancyTable.getSelectionModel().select(stat));
+        }
     }
 
     private void renderSeatHeatmap(List<Seat> seats) {

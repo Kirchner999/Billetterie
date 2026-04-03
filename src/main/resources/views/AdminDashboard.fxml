@@ -82,6 +82,12 @@
                         <Label fx:id="expiredCleanupLabel" text="0" styleClass="stat-value"/>
                         <Label text="Evenements expires supprimes au chargement" styleClass="stat-subtitle"/>
                     </VBox>
+
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Ecarts stock" styleClass="stat-title"/>
+                        <Label fx:id="seatMismatchCountLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Ecarts entre stock affiche et sieges libres" styleClass="stat-subtitle"/>
+                    </VBox>
                 </FlowPane>
 
                 <VBox styleClass="card" spacing="14">
@@ -152,6 +158,25 @@
                             <Label fx:id="occupancySelectedEventLabel" text="-" styleClass="section-subtitle" wrapText="true"/>
                         </VBox>
                     </HBox>
+
+                    <HBox spacing="12">
+                        <Button text="Aligner le stock sur les sieges" styleClass="button-secondary" onAction="#alignSelectedSeatStock"/>
+                        <Button text="Generer une rangee" styleClass="button-secondary" onAction="#generateSeatsForSelectedEvent"/>
+                    </HBox>
+
+                    <VBox spacing="6">
+                        <Label text="Controle de coherence" styleClass="stat-title"/>
+                        <Label fx:id="consistencySummaryLabel" text="Aucune incoherence detectee entre le stock et les sieges libres." styleClass="section-subtitle" wrapText="true"/>
+                    </VBox>
+
+                    <TableView fx:id="consistencyTable" prefHeight="180" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colConsistencyEvent" text="Spectacle" prefWidth="280"/>
+                            <TableColumn fx:id="colConsistencyStock" text="Stock" prefWidth="90"/>
+                            <TableColumn fx:id="colConsistencyAvailable" text="Sieges libres" prefWidth="110"/>
+                            <TableColumn fx:id="colConsistencyDelta" text="Ecart" prefWidth="90"/>
+                        </columns>
+                    </TableView>
 
                     <TableView fx:id="occupancyTable" prefHeight="220" styleClass="data-table">
                         <columns>
