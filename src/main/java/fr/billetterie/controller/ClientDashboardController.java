@@ -13,6 +13,8 @@ import fr.billetterie.service.TicketArchiveService;
 import fr.billetterie.service.TicketPdfService;
 import fr.billetterie.service.TicketReceiptDocument;
 import fr.billetterie.utils.ThemeManager;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -51,10 +53,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import javafx.util.Duration;
 
 public class ClientDashboardController {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final Duration AUTO_REFRESH_INTERVAL = Duration.seconds(5);
 
     @FXML private VBox contentPane;
 
@@ -62,9 +66,17 @@ public class ClientDashboardController {
     private final PurchaseService purchaseService = new PurchaseService(ticketStoreRepository);
     private final TicketPdfService ticketPdfService = new TicketPdfService();
     private final TicketArchiveService ticketArchiveService = new TicketArchiveService();
+    private final Timeline autoRefreshTimeline = new Timeline(new KeyFrame(AUTO_REFRESH_INTERVAL, event -> refreshCurrentView()));
+
+    private String currentSection = "home";
+    private String currentSearchText = "";
+    private String currentFilterMode = "all";
+    private String currentSortMode = "date";
 
     @FXML
     public void initialize() {
+        autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
+        autoRefreshTimeline.play();
         showClientHome();
     }
 
@@ -74,7 +86,13 @@ public class ClientDashboardController {
     }
 
     @FXML
+    public void refreshNow() {
+        refreshCurrentView();
+    }
+
+    @FXML
     public void logout() {
+        autoRefreshTimeline.stop();
         App.setCurrentUser(null);
         App.loadPage("Login.fxml");
     }
@@ -85,6 +103,11 @@ public class ClientDashboardController {
     }
 
     private void renderSpectaclesPage(String searchText, String filterMode, String sortMode) {
+        currentSection = "spectacles";
+        currentSearchText = searchText == null ? "" : searchText;
+        currentFilterMode = filterMode == null ? "all" : filterMode;
+        currentSortMode = sortMode == null ? "date" : sortMode;
+
         List<Ticket> tickets = ticketStoreRepository.getAvailableTickets();
         List<Ticket> visibleTickets = filterTickets(tickets, searchText, filterMode, sortMode);
 
@@ -104,6 +127,7 @@ public class ClientDashboardController {
 
     @FXML
     public void showMesBillets() {
+        currentSection = "mes-achats";
         Client user = App.getCurrentUser();
         if (user == null) {
             contentPane.getChildren().setAll(buildEmptyState("Aucun utilisateur connecte."));
@@ -148,6 +172,7 @@ public class ClientDashboardController {
 
     @FXML
     public void showMesBilletsPdf() {
+        currentSection = "mes-billets-pdf";
         Client user = App.getCurrentUser();
         if (user == null) {
             contentPane.getChildren().setAll(buildEmptyState("Aucun utilisateur connecte."));
@@ -276,6 +301,7 @@ public class ClientDashboardController {
     }
 
     private void showClientHome() {
+        currentSection = "home";
         Client user = App.getCurrentUser();
         List<Ticket> tickets = ticketStoreRepository.getAvailableTickets();
         List<Purchase> purchases = user != null ? ticketStoreRepository.getPurchasesByUser(user.getId()) : List.of();
@@ -301,6 +327,15 @@ public class ClientDashboardController {
         }
 
         contentPane.getChildren().setAll(page);
+    }
+
+    private void refreshCurrentView() {
+        switch (currentSection) {
+            case "spectacles" -> renderSpectaclesPage(currentSearchText, currentFilterMode, currentSortMode);
+            case "mes-achats" -> showMesBillets();
+            case "mes-billets-pdf" -> showMesBilletsPdf();
+            default -> showClientHome();
+        }
     }
 
     private VBox buildEventsList(List<Ticket> tickets) {

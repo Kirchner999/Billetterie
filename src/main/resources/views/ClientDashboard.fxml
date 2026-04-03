@@ -21,6 +21,7 @@
             <Button text="Evenements disponibles" onAction="#showSpectacles"/>
             <Button text="Mes achats" onAction="#showMesBillets"/>
             <Button text="Mes billets PDF" onAction="#showMesBilletsPdf"/>
+            <Button text="Rafraichir maintenant" onAction="#refreshNow" styleClass="button-secondary"/>
             <Button text="Changer theme" onAction="#switchTheme" styleClass="button-secondary"/>
             <Button text="Deconnexion" onAction="#logout" styleClass="button-secondary"/>
         </VBox>

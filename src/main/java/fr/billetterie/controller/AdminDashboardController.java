@@ -18,6 +18,8 @@ import fr.billetterie.repository.PurchaseOperationResult;
 import fr.billetterie.service.EventFormResult;
 import fr.billetterie.service.EventManagementService;
 import fr.billetterie.utils.ThemeManager;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -50,12 +52,14 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import javafx.util.Duration;
 
 public class AdminDashboardController {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final int PURCHASES_PAGE_SIZE = 10;
     private static final int AUDIT_PAGE_SIZE = 12;
+    private static final Duration AUTO_REFRESH_INTERVAL = Duration.seconds(5);
 
     @FXML private Label usersCountLabel;
     @FXML private Label ticketsCountLabel;
@@ -184,9 +188,12 @@ public class AdminDashboardController {
     private int auditPageIndex;
     private List<AdminPurchaseRecord> filteredPurchases = List.of();
     private List<TicketEventLog> filteredAuditLogs = List.of();
+    private final Timeline autoRefreshTimeline = new Timeline(new KeyFrame(AUTO_REFRESH_INTERVAL, event -> refreshAdminView()));
 
     @FXML
     public void initialize() {
+        autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
+        autoRefreshTimeline.play();
         configureEventTable();
         configureOccupancyTables();
         configurePurchasesTable();
@@ -427,6 +434,7 @@ public class AdminDashboardController {
 
     @FXML
     public void logout() {
+        autoRefreshTimeline.stop();
         App.setCurrentUser(null);
         App.loadPage("Login.fxml");
     }
