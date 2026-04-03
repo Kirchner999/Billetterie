@@ -16,6 +16,9 @@ import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.scene.chart.BarChart;
+import javafx.scene.chart.PieChart;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -111,6 +114,9 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminSalesStat, Integer> colSalesCancelled;
     @FXML private TableColumn<AdminSalesStat, Integer> colSalesTicketsSold;
     @FXML private TableColumn<AdminSalesStat, String> colSalesRevenue;
+    @FXML private BarChart<String, Number> salesRevenueChart;
+    @FXML private BarChart<String, Number> salesVolumeChart;
+    @FXML private PieChart salesStatusChart;
 
     @FXML private TextField eventNameField;
     @FXML private TextField eventDateField;
@@ -475,6 +481,39 @@ public class AdminDashboardController {
         }
     }
 
+    @FXML
+    public void exportSalesStatsCsv() {
+        List<AdminSalesStat> stats = TicketCatalogDAO.getSalesStatsByTicket();
+        if (stats.isEmpty()) {
+            showResult(false, "Aucune statistique de vente a exporter.");
+            return;
+        }
+
+        try {
+            Path exportDir = Path.of("target", "exports");
+            Files.createDirectories(exportDir);
+            Path csvPath = exportDir.resolve("stats-spectacles-" + System.currentTimeMillis() + ".csv");
+
+            List<String> lines = new ArrayList<>();
+            lines.add("event_name;confirmed_purchases;refunded_purchases;cancelled_purchases;tickets_sold;revenue");
+            for (AdminSalesStat stat : stats) {
+                lines.add(String.join(";",
+                        csvValue(stat.eventName()),
+                        csvValue(String.valueOf(stat.confirmedPurchases())),
+                        csvValue(String.valueOf(stat.refundedPurchases())),
+                        csvValue(String.valueOf(stat.cancelledPurchases())),
+                        csvValue(String.valueOf(stat.ticketsSold())),
+                        csvValue(stat.revenue().toPlainString())
+                ));
+            }
+
+            Files.write(csvPath, lines, StandardCharsets.UTF_8);
+            showResult(true, "Export CSV des stats cree.\nChemin: " + csvPath + "\nLignes: " + stats.size());
+        } catch (IOException e) {
+            showResult(false, "Impossible de generer le CSV des stats.");
+        }
+    }
+
     private void refreshAdminView() {
         int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
 
@@ -584,7 +623,9 @@ public class AdminDashboardController {
     }
 
     private void refreshSalesStats() {
-        salesStatsTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getSalesStatsByTicket()));
+        List<AdminSalesStat> stats = TicketCatalogDAO.getSalesStatsByTicket();
+        salesStatsTable.setItems(FXCollections.observableArrayList(stats));
+        refreshSalesCharts(stats);
     }
 
     private void showResult(boolean success, String message) {
@@ -648,6 +689,50 @@ public class AdminDashboardController {
         if (openPdfButton != null) {
             openPdfButton.setDisable(purchase.pdfPath() == null || purchase.pdfPath().isBlank());
         }
+    }
+
+    private void refreshSalesCharts(List<AdminSalesStat> stats) {
+        if (salesRevenueChart != null) {
+            salesRevenueChart.getData().clear();
+            XYChart.Series<String, Number> revenueSeries = new XYChart.Series<>();
+            revenueSeries.setName("CA confirme");
+            stats.stream()
+                    .sorted(Comparator.comparing(AdminSalesStat::revenue).reversed())
+                    .limit(5)
+                    .forEach(stat -> revenueSeries.getData().add(new XYChart.Data<>(shortEventName(stat.eventName()), stat.revenue())));
+            salesRevenueChart.getData().add(revenueSeries);
+        }
+
+        if (salesVolumeChart != null) {
+            salesVolumeChart.getData().clear();
+            XYChart.Series<String, Number> volumeSeries = new XYChart.Series<>();
+            volumeSeries.setName("Billets vendus");
+            stats.stream()
+                    .sorted(Comparator.comparing(AdminSalesStat::ticketsSold).reversed())
+                    .limit(5)
+                    .forEach(stat -> volumeSeries.getData().add(new XYChart.Data<>(shortEventName(stat.eventName()), stat.ticketsSold())));
+            salesVolumeChart.getData().add(volumeSeries);
+        }
+
+        if (salesStatusChart != null) {
+            int confirmed = stats.stream().mapToInt(AdminSalesStat::confirmedPurchases).sum();
+            int refunded = stats.stream().mapToInt(AdminSalesStat::refundedPurchases).sum();
+            int cancelled = stats.stream().mapToInt(AdminSalesStat::cancelledPurchases).sum();
+            salesStatusChart.setData(FXCollections.observableArrayList(
+                    new PieChart.Data("Confirmes", confirmed),
+                    new PieChart.Data("Rembourses", refunded),
+                    new PieChart.Data("Annules", cancelled)
+            ));
+            salesStatusChart.setLabelsVisible(true);
+            salesStatusChart.setLegendVisible(true);
+        }
+    }
+
+    private String shortEventName(String value) {
+        if (value == null || value.length() <= 18) {
+            return value;
+        }
+        return value.substring(0, 18) + "...";
     }
 
     private boolean matchesPurchaseSearch(AdminPurchaseRecord purchase, String searchText) {
