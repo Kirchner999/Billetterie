@@ -3,17 +3,17 @@ package fr.billetterie.model;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public record Purchase(
-        int id,
+public record AdminPurchaseRecord(
+        int purchaseId,
         int userId,
+        String username,
         int ticketId,
         String eventName,
         int quantity,
         BigDecimal total,
-        LocalDateTime purchaseDate,
-        String ticketNumber,
-        String pdfPath,
         String seatLabels,
+        String ticketNumber,
+        LocalDateTime purchaseDate,
         String status
 ) {
 }

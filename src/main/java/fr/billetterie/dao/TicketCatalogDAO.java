@@ -1,8 +1,10 @@
 package fr.billetterie.dao;
 
+import fr.billetterie.model.AdminPurchaseRecord;
 import fr.billetterie.model.Purchase;
 import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
+import fr.billetterie.model.TicketEventLog;
 import fr.billetterie.repository.PurchaseOperationResult;
 
 import java.math.BigDecimal;
@@ -192,13 +194,14 @@ public class TicketCatalogDAO {
                     p.purchase_date,
                     tf.ticket_number AS resolved_ticket_number,
                     tf.pdf_path AS resolved_pdf_path,
-                    NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), '') AS resolved_seat_labels
+                    NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), '') AS resolved_seat_labels,
+                    COALESCE(p.status, 'CONFIRMED') AS resolved_status
                 FROM purchases p
                 JOIN tickets t ON t.id = p.ticket_id
                 LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
                 LEFT JOIN purchase_seats ps ON ps.purchase_id = p.id
                 WHERE p.user_id = ?
-                GROUP BY p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, tf.pdf_path
+                GROUP BY p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, tf.pdf_path, p.status
                 ORDER BY p.purchase_date DESC
                 """;
 
@@ -218,7 +221,8 @@ public class TicketCatalogDAO {
                                 rs.getTimestamp("purchase_date").toLocalDateTime(),
                                 rs.getString("resolved_ticket_number"),
                                 rs.getString("resolved_pdf_path"),
-                                rs.getString("resolved_seat_labels")
+                                rs.getString("resolved_seat_labels"),
+                                rs.getString("resolved_status")
                         ));
                     }
                 }
@@ -234,7 +238,7 @@ public class TicketCatalogDAO {
     public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
         String ticketSql = "SELECT event_name, price, stock FROM tickets WHERE id = ? FOR UPDATE";
         String stockUpdateSql = "UPDATE tickets SET stock = stock - ? WHERE id = ?";
-        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date) VALUES (?, ?, ?, ?, NOW())";
+        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date, status) VALUES (?, ?, ?, ?, NOW(), 'CONFIRMED')";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -380,22 +384,192 @@ public class TicketCatalogDAO {
     }
 
     public static void logTicketEvent(int purchaseId, String eventType, String details) {
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            logTicketEvent(conn, purchaseId, eventType, details);
+        } catch (Exception e) {
+            System.out.println("Erreur logTicketEvent()");
+            e.printStackTrace();
+        }
+    }
+
+    public static List<AdminPurchaseRecord> getAdminPurchases() {
+        List<AdminPurchaseRecord> purchases = new ArrayList<>();
         String sql = """
-                INSERT INTO ticket_events (purchase_id, event_type, details, created_at)
-                VALUES (?, ?, ?, NOW())
+                SELECT
+                    p.id AS purchase_id,
+                    p.user_id,
+                    u.username,
+                    p.ticket_id,
+                    t.event_name,
+                    p.quantity,
+                    p.total,
+                    p.purchase_date,
+                    tf.ticket_number,
+                    NULLIF(GROUP_CONCAT(ps.seat_label ORDER BY ps.seat_label SEPARATOR ', '), '') AS seat_labels,
+                    COALESCE(p.status, 'CONFIRMED') AS purchase_status
+                FROM purchases p
+                JOIN users u ON u.id = p.user_id
+                JOIN tickets t ON t.id = p.ticket_id
+                LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
+                LEFT JOIN purchase_seats ps ON ps.purchase_id = p.id
+                GROUP BY p.id, p.user_id, u.username, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, tf.ticket_number, p.status
+                ORDER BY p.purchase_date DESC
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql);
+                 ResultSet rs = pst.executeQuery()) {
+                while (rs.next()) {
+                    purchases.add(new AdminPurchaseRecord(
+                            rs.getInt("purchase_id"),
+                            rs.getInt("user_id"),
+                            rs.getString("username"),
+                            rs.getInt("ticket_id"),
+                            rs.getString("event_name"),
+                            rs.getInt("quantity"),
+                            rs.getBigDecimal("total"),
+                            rs.getString("seat_labels"),
+                            rs.getString("ticket_number"),
+                            rs.getTimestamp("purchase_date").toLocalDateTime(),
+                            rs.getString("purchase_status")
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur getAdminPurchases()");
+            e.printStackTrace();
+        }
+
+        return purchases;
+    }
+
+    public static List<TicketEventLog> getRecentTicketEvents(int limit) {
+        List<TicketEventLog> events = new ArrayList<>();
+        String sql = """
+                SELECT
+                    te.id,
+                    te.purchase_id,
+                    u.username,
+                    t.event_name,
+                    tf.ticket_number,
+                    te.event_type,
+                    te.details,
+                    te.created_at
+                FROM ticket_events te
+                JOIN purchases p ON p.id = te.purchase_id
+                JOIN users u ON u.id = p.user_id
+                JOIN tickets t ON t.id = p.ticket_id
+                LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
+                ORDER BY te.created_at DESC, te.id DESC
+                LIMIT ?
                 """;
 
         try (Connection conn = Database.getConnection()) {
             ensurePurchaseArtifactsSchema(conn);
             try (PreparedStatement pst = conn.prepareStatement(sql)) {
-                pst.setInt(1, purchaseId);
-                pst.setString(2, eventType);
-                pst.setString(3, details);
-                pst.executeUpdate();
+                pst.setInt(1, limit);
+                try (ResultSet rs = pst.executeQuery()) {
+                    while (rs.next()) {
+                        events.add(new TicketEventLog(
+                                rs.getInt("id"),
+                                rs.getInt("purchase_id"),
+                                rs.getString("username"),
+                                rs.getString("event_name"),
+                                rs.getString("ticket_number"),
+                                rs.getString("event_type"),
+                                rs.getString("details"),
+                                rs.getTimestamp("created_at").toLocalDateTime()
+                        ));
+                    }
+                }
             }
         } catch (Exception e) {
-            System.out.println("Erreur logTicketEvent()");
+            System.out.println("Erreur getRecentTicketEvents()");
             e.printStackTrace();
+        }
+
+        return events;
+    }
+
+    public static PurchaseOperationResult cancelPurchase(int purchaseId) {
+        String selectSql = """
+                SELECT p.ticket_id, p.quantity, COALESCE(p.status, 'CONFIRMED') AS purchase_status, t.event_name
+                FROM purchases p
+                JOIN tickets t ON t.id = p.ticket_id
+                WHERE p.id = ?
+                FOR UPDATE
+                """;
+        String restockSql = "UPDATE tickets SET stock = stock + ? WHERE id = ?";
+        String releaseSeatsSql = """
+                UPDATE seats s
+                JOIN purchase_seats ps
+                  ON ps.purchase_id = ?
+                 AND ps.seat_label = CONCAT(s.seat_row, s.seat_number)
+                SET s.is_taken = 0
+                WHERE s.ticket_id = ?
+                """;
+        String cancelSql = "UPDATE purchases SET status = 'CANCELLED' WHERE id = ?";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                ensurePurchaseArtifactsSchema(conn);
+                int ticketId;
+                int quantity;
+                String status;
+                String eventName;
+
+                try (PreparedStatement pst = conn.prepareStatement(selectSql)) {
+                    pst.setInt(1, purchaseId);
+                    try (ResultSet rs = pst.executeQuery()) {
+                        if (!rs.next()) {
+                            conn.rollback();
+                            return PurchaseOperationResult.failure("Achat introuvable.");
+                        }
+                        ticketId = rs.getInt("ticket_id");
+                        quantity = rs.getInt("quantity");
+                        status = rs.getString("purchase_status");
+                        eventName = rs.getString("event_name");
+                    }
+                }
+
+                if ("CANCELLED".equalsIgnoreCase(status)) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Cet achat est deja annule.");
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(restockSql)) {
+                    pst.setInt(1, quantity);
+                    pst.setInt(2, ticketId);
+                    pst.executeUpdate();
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(releaseSeatsSql)) {
+                    pst.setInt(1, purchaseId);
+                    pst.setInt(2, ticketId);
+                    pst.executeUpdate();
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(cancelSql)) {
+                    pst.setInt(1, purchaseId);
+                    pst.executeUpdate();
+                }
+
+                logTicketEvent(conn, purchaseId, "CANCELLED", "Achat annule depuis l'admin pour " + eventName);
+                conn.commit();
+                return PurchaseOperationResult.success("Achat annule et stock remis a jour.", purchaseId);
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur cancelPurchase()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Erreur lors de l'annulation de l'achat.");
         }
     }
 
@@ -455,6 +629,14 @@ public class TicketCatalogDAO {
         return count("SELECT COUNT(*) FROM purchases");
     }
 
+    public static int countConfirmedPurchases() {
+        return countPurchaseByStatus("CONFIRMED");
+    }
+
+    public static int countCancelledPurchases() {
+        return countPurchaseByStatus("CANCELLED");
+    }
+
     private static Ticket mapTicket(ResultSet rs) throws SQLException {
         return new Ticket(
                 rs.getInt("id"),
@@ -467,6 +649,10 @@ public class TicketCatalogDAO {
 
     private static void ensurePurchaseArtifactsSchema(Connection conn) throws SQLException {
         try (Statement st = conn.createStatement()) {
+            st.executeUpdate("""
+                    ALTER TABLE purchases
+                    ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED'
+                    """);
             st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS ticket_files (
                         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -505,6 +691,19 @@ public class TicketCatalogDAO {
                     """);
         }
         backfillLegacyPurchaseArtifacts(conn);
+    }
+
+    private static void logTicketEvent(Connection conn, int purchaseId, String eventType, String details) throws SQLException {
+        String sql = """
+                INSERT INTO ticket_events (purchase_id, event_type, details, created_at)
+                VALUES (?, ?, ?, NOW())
+                """;
+        try (PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, purchaseId);
+            pst.setString(2, eventType);
+            pst.setString(3, details);
+            pst.executeUpdate();
+        }
     }
 
     private static void backfillLegacyPurchaseArtifacts(Connection conn) throws SQLException {
@@ -613,6 +812,23 @@ public class TicketCatalogDAO {
             return rs.next() ? rs.getInt(1) : 0;
         } catch (SQLException e) {
             System.out.println("Erreur count()");
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    private static int countPurchaseByStatus(String status) {
+        String sql = "SELECT COUNT(*) FROM purchases WHERE COALESCE(status, 'CONFIRMED') = ?";
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setString(1, status);
+                try (ResultSet rs = pst.executeQuery()) {
+                    return rs.next() ? rs.getInt(1) : 0;
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Erreur countPurchaseByStatus()");
             e.printStackTrace();
             return 0;
         }

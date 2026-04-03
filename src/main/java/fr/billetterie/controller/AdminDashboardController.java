@@ -3,11 +3,16 @@ package fr.billetterie.controller;
 import fr.billetterie.App;
 import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.dao.TicketCatalogDAO;
+import fr.billetterie.model.AdminPurchaseRecord;
 import fr.billetterie.model.Ticket;
+import fr.billetterie.model.TicketEventLog;
 import fr.billetterie.repository.DaoTicketAdminRepository;
+import fr.billetterie.repository.PurchaseOperationResult;
 import fr.billetterie.service.EventFormResult;
 import fr.billetterie.service.EventManagementService;
 import fr.billetterie.utils.ThemeManager;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
@@ -26,12 +31,31 @@ public class AdminDashboardController {
     @FXML private Label usersCountLabel;
     @FXML private Label ticketsCountLabel;
     @FXML private Label purchasesCountLabel;
+    @FXML private Label cancelledCountLabel;
     @FXML private Label expiredCleanupLabel;
+
     @FXML private TableView<Ticket> eventsTable;
     @FXML private TableColumn<Ticket, String> colEventName;
     @FXML private TableColumn<Ticket, String> colEventDate;
     @FXML private TableColumn<Ticket, String> colEventPrice;
     @FXML private TableColumn<Ticket, Integer> colEventStock;
+
+    @FXML private TableView<AdminPurchaseRecord> purchasesTable;
+    @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseUser;
+    @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseEvent;
+    @FXML private TableColumn<AdminPurchaseRecord, Integer> colPurchaseQuantity;
+    @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseTotal;
+    @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseStatus;
+    @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseDate;
+
+    @FXML private TableView<TicketEventLog> eventsLogTable;
+    @FXML private TableColumn<TicketEventLog, String> colLogDate;
+    @FXML private TableColumn<TicketEventLog, String> colLogType;
+    @FXML private TableColumn<TicketEventLog, String> colLogUser;
+    @FXML private TableColumn<TicketEventLog, String> colLogEvent;
+    @FXML private TableColumn<TicketEventLog, String> colLogTicket;
+    @FXML private TableColumn<TicketEventLog, String> colLogDetails;
+
     @FXML private TextField eventNameField;
     @FXML private TextField eventDateField;
     @FXML private TextField eventPriceField;
@@ -39,22 +63,19 @@ public class AdminDashboardController {
 
     private final EventManagementService eventManagementService = new EventManagementService(new DaoTicketAdminRepository());
     private int selectedTicketId;
+    private int selectedPurchaseId;
 
     @FXML
     public void initialize() {
-        configureTable();
-        refreshMetrics();
-        refreshEvents();
+        configureEventTable();
+        configurePurchasesTable();
+        configureAuditTable();
+        refreshAdminView();
     }
 
     @FXML
     public void refreshMetrics() {
-        int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
-
-        usersCountLabel.setText(String.valueOf(ClientDAO.getAll().size()));
-        ticketsCountLabel.setText(String.valueOf(TicketCatalogDAO.countTickets()));
-        purchasesCountLabel.setText(String.valueOf(TicketCatalogDAO.countPurchases()));
-        expiredCleanupLabel.setText(String.valueOf(deletedExpired));
+        refreshAdminView();
     }
 
     @FXML
@@ -65,11 +86,10 @@ public class AdminDashboardController {
                 eventPriceField.getText(),
                 eventStockField.getText()
         );
-        showResult(result);
+        showResult(result.success(), result.message());
         if (result.success()) {
             resetForm();
-            refreshEvents();
-            refreshMetrics();
+            refreshAdminView();
         }
     }
 
@@ -82,22 +102,38 @@ public class AdminDashboardController {
                 eventPriceField.getText(),
                 eventStockField.getText()
         );
-        showResult(result);
+        showResult(result.success(), result.message());
         if (result.success()) {
             resetForm();
-            refreshEvents();
-            refreshMetrics();
+            refreshAdminView();
         }
     }
 
     @FXML
     public void deleteEvent() {
         EventFormResult result = eventManagementService.delete(selectedTicketId);
-        showResult(result);
+        showResult(result.success(), result.message());
         if (result.success()) {
             resetForm();
-            refreshEvents();
-            refreshMetrics();
+            refreshAdminView();
+        }
+    }
+
+    @FXML
+    public void cancelSelectedPurchase() {
+        if (selectedPurchaseId == 0) {
+            showResult(false, "Selectionne un achat dans le tableau.");
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.cancelPurchase(selectedPurchaseId);
+        showResult(result.success(), result.message());
+        if (result.success()) {
+            selectedPurchaseId = 0;
+            if (purchasesTable != null) {
+                purchasesTable.getSelectionModel().clearSelection();
+            }
+            refreshAdminView();
         }
     }
 
@@ -124,11 +160,25 @@ public class AdminDashboardController {
         App.loadPage("Login.fxml");
     }
 
-    private void configureTable() {
-        colEventName.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().eventName()));
-        colEventDate.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(DATE_FORMAT.format(cell.getValue().eventDate())));
-        colEventPrice.setCellValueFactory(cell -> new javafx.beans.property.SimpleStringProperty(cell.getValue().price() + " EUR"));
-        colEventStock.setCellValueFactory(cell -> new javafx.beans.property.ReadOnlyObjectWrapper<>(cell.getValue().stock()));
+    private void refreshAdminView() {
+        int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
+
+        usersCountLabel.setText(String.valueOf(ClientDAO.getAll().size()));
+        ticketsCountLabel.setText(String.valueOf(TicketCatalogDAO.countTickets()));
+        purchasesCountLabel.setText(String.valueOf(TicketCatalogDAO.countConfirmedPurchases()));
+        cancelledCountLabel.setText(String.valueOf(TicketCatalogDAO.countCancelledPurchases()));
+        expiredCleanupLabel.setText(String.valueOf(deletedExpired));
+
+        refreshEvents();
+        refreshPurchases();
+        refreshAudit();
+    }
+
+    private void configureEventTable() {
+        colEventName.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+        colEventDate.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().eventDate())));
+        colEventPrice.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().price() + " EUR"));
+        colEventStock.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().stock()));
 
         eventsTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue == null) {
@@ -142,14 +192,46 @@ public class AdminDashboardController {
         });
     }
 
+    private void configurePurchasesTable() {
+        colPurchaseUser.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().username()));
+        colPurchaseEvent.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+        colPurchaseQuantity.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().quantity()));
+        colPurchaseTotal.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().total() + " EUR"));
+        colPurchaseStatus.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().status()));
+        colPurchaseDate.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().purchaseDate())));
+
+        purchasesTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            selectedPurchaseId = newValue != null ? newValue.purchaseId() : 0;
+        });
+    }
+
+    private void configureAuditTable() {
+        colLogDate.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().createdAt())));
+        colLogType.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventType()));
+        colLogUser.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().username()));
+        colLogEvent.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
+        colLogTicket.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().ticketNumber() != null ? cell.getValue().ticketNumber() : "-"));
+        colLogDetails.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().details() != null ? cell.getValue().details() : "-"));
+    }
+
     private void refreshEvents() {
         List<Ticket> tickets = TicketCatalogDAO.getAllTickets();
         eventsTable.setItems(FXCollections.observableArrayList(tickets));
     }
 
-    private void showResult(EventFormResult result) {
-        Alert.AlertType type = result.success() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
-        Alert alert = new Alert(type, result.message());
+    private void refreshPurchases() {
+        List<AdminPurchaseRecord> purchases = TicketCatalogDAO.getAdminPurchases();
+        purchasesTable.setItems(FXCollections.observableArrayList(purchases));
+    }
+
+    private void refreshAudit() {
+        List<TicketEventLog> logs = TicketCatalogDAO.getRecentTicketEvents(30);
+        eventsLogTable.setItems(FXCollections.observableArrayList(logs));
+    }
+
+    private void showResult(boolean success, String message) {
+        Alert.AlertType type = success ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
+        Alert alert = new Alert(type, message);
         alert.showAndWait();
     }
 }

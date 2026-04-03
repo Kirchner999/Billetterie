@@ -22,7 +22,7 @@
             </padding>
 
             <Label text="Admin Panel" styleClass="title"/>
-            <Label text="Supervision de la billetterie" styleClass="section-subtitle" wrapText="true"/>
+            <Label text="Pilotage des spectacles, achats et journaux de billets." styleClass="section-subtitle" wrapText="true"/>
             <Button text="Rafraichir" onAction="#refreshMetrics"/>
             <Button text="Changer theme" styleClass="button-secondary" onAction="#switchTheme"/>
             <Button text="Deconnexion" styleClass="button-secondary" onAction="#logout"/>
@@ -38,7 +38,7 @@
 
                 <VBox spacing="4">
                     <Label text="Tableau de bord admin" styleClass="section-title"/>
-                    <Label text="Vue synthese et gestion des evenements." styleClass="section-subtitle"/>
+                    <Label text="Supervision complete du catalogue, des achats et des traces billet." styleClass="section-subtitle"/>
                 </VBox>
 
                 <FlowPane alignment="CENTER_LEFT" hgap="18" vgap="18">
@@ -55,9 +55,15 @@
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
-                        <Label text="Achats" styleClass="stat-title"/>
+                        <Label text="Achats confirmes" styleClass="stat-title"/>
                         <Label fx:id="purchasesCountLabel" text="0" styleClass="stat-value"/>
-                        <Label text="Transactions historisees" styleClass="stat-subtitle"/>
+                        <Label text="Reservations encore actives" styleClass="stat-subtitle"/>
+                    </VBox>
+
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Annulations" styleClass="stat-title"/>
+                        <Label fx:id="cancelledCountLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Achats annules avec remise en stock" styleClass="stat-subtitle"/>
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
@@ -71,7 +77,7 @@
                     <Label text="Gestion des evenements" styleClass="section-title"/>
                     <Label text="Selectionne une ligne pour modifier un evenement existant, ou remplis le formulaire pour en creer un nouveau." styleClass="section-subtitle" wrapText="true"/>
 
-                    <TableView fx:id="eventsTable" prefHeight="280" styleClass="data-table">
+                    <TableView fx:id="eventsTable" prefHeight="260" styleClass="data-table">
                         <columns>
                             <TableColumn fx:id="colEventName" text="Evenement" prefWidth="260"/>
                             <TableColumn fx:id="colEventDate" text="Date" prefWidth="180"/>
@@ -93,6 +99,42 @@
                         <Button text="Supprimer" styleClass="button-secondary" onAction="#deleteEvent"/>
                         <Button text="Vider" styleClass="button-secondary" onAction="#resetForm"/>
                     </HBox>
+                </VBox>
+
+                <VBox styleClass="card" spacing="14">
+                    <Label text="Achats clients" styleClass="section-title"/>
+                    <Label text="Selectionne un achat pour l'annuler proprement sans perdre l'historique." styleClass="section-subtitle" wrapText="true"/>
+
+                    <TableView fx:id="purchasesTable" prefHeight="240" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colPurchaseUser" text="Utilisateur" prefWidth="140"/>
+                            <TableColumn fx:id="colPurchaseEvent" text="Evenement" prefWidth="240"/>
+                            <TableColumn fx:id="colPurchaseQuantity" text="Quantite" prefWidth="90"/>
+                            <TableColumn fx:id="colPurchaseTotal" text="Total" prefWidth="110"/>
+                            <TableColumn fx:id="colPurchaseStatus" text="Statut" prefWidth="120"/>
+                            <TableColumn fx:id="colPurchaseDate" text="Date" prefWidth="170"/>
+                        </columns>
+                    </TableView>
+
+                    <HBox spacing="12">
+                        <Button text="Annuler l'achat selectionne" styleClass="button-secondary" onAction="#cancelSelectedPurchase"/>
+                    </HBox>
+                </VBox>
+
+                <VBox styleClass="card" spacing="14">
+                    <Label text="Journal des billets" styleClass="section-title"/>
+                    <Label text="Audit recent de generation, regeneration, export et annulation." styleClass="section-subtitle" wrapText="true"/>
+
+                    <TableView fx:id="eventsLogTable" prefHeight="260" styleClass="data-table">
+                        <columns>
+                            <TableColumn fx:id="colLogDate" text="Date" prefWidth="160"/>
+                            <TableColumn fx:id="colLogType" text="Type" prefWidth="110"/>
+                            <TableColumn fx:id="colLogUser" text="Utilisateur" prefWidth="120"/>
+                            <TableColumn fx:id="colLogEvent" text="Evenement" prefWidth="220"/>
+                            <TableColumn fx:id="colLogTicket" text="Billet" prefWidth="180"/>
+                            <TableColumn fx:id="colLogDetails" text="Details" prefWidth="320"/>
+                        </columns>
+                    </TableView>
                 </VBox>
             </VBox>
         </ScrollPane>

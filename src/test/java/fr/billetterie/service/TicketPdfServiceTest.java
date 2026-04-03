@@ -49,7 +49,8 @@ class TicketPdfServiceTest {
                 LocalDateTime.of(2026, 4, 3, 13, 0),
                 "BLT-20260403-130000-U7",
                 null,
-                "A3, A4"
+                "A3, A4",
+                "CONFIRMED"
         );
 
         TicketReceiptDocument receipt = service.regenerateReceipt(user, purchase, LocalDateTime.of(2026, 6, 15, 21, 0));

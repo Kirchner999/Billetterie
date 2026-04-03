@@ -226,7 +226,7 @@ public class ClientDashboardController {
                     setGraphic(null);
                     setText(null);
                 } else {
-                    Label badge = buildStatusBadge(item, item.equals("present") ? "status-success" : item.equals("regenere") ? "status-info" : "status-warning");
+                    Label badge = buildStatusBadge(item, item.equals("present") ? "status-success" : item.equals("regenere") ? "status-info" : item.equals("annule") ? "status-warning" : "status-warning");
                     setGraphic(badge);
                     setText(null);
                 }
@@ -892,3 +892,5 @@ public class ClientDashboardController {
         return label;
     }
 }
+
+
