@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class TicketCatalogDAO {
@@ -61,6 +62,23 @@ public class TicketCatalogDAO {
         }
 
         return tickets;
+    }
+
+    public static Optional<Ticket> findTicketById(int ticketId) {
+        String sql = "SELECT id, event_name, event_date, price, stock FROM tickets WHERE id = ?";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, ticketId);
+            try (ResultSet rs = pst.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapTicket(rs));
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur findTicketById()");
+            e.printStackTrace();
+        }
+        return Optional.empty();
     }
 
     public static boolean createTicket(Ticket ticket) {
@@ -164,7 +182,7 @@ public class TicketCatalogDAO {
     public static List<Purchase> getPurchasesByUser(int userId) {
         List<Purchase> purchases = new ArrayList<>();
         String sql = """
-                SELECT p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, p.ticket_number, p.pdf_path
+                SELECT p.id, p.user_id, p.ticket_id, t.event_name, p.quantity, p.total, p.purchase_date, p.ticket_number, p.pdf_path, p.seat_labels
                 FROM purchases p
                 JOIN tickets t ON t.id = p.ticket_id
                 WHERE p.user_id = ?
@@ -186,7 +204,8 @@ public class TicketCatalogDAO {
                                 rs.getBigDecimal("total"),
                                 rs.getTimestamp("purchase_date").toLocalDateTime(),
                                 rs.getString("ticket_number"),
-                                rs.getString("pdf_path")
+                                rs.getString("pdf_path"),
+                                rs.getString("seat_labels")
                         ));
                     }
                 }
@@ -202,7 +221,7 @@ public class TicketCatalogDAO {
     public static PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity) {
         String ticketSql = "SELECT event_name, price, stock FROM tickets WHERE id = ? FOR UPDATE";
         String stockUpdateSql = "UPDATE tickets SET stock = stock - ? WHERE id = ?";
-        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date, ticket_number, pdf_path) VALUES (?, ?, ?, ?, NOW(), NULL, NULL)";
+        String purchaseSql = "INSERT INTO purchases (user_id, ticket_id, quantity, total, purchase_date, ticket_number, pdf_path, seat_labels) VALUES (?, ?, ?, ?, NOW(), NULL, NULL, NULL)";
 
         try (Connection conn = Database.getConnection()) {
             conn.setAutoCommit(false);
@@ -293,14 +312,15 @@ public class TicketCatalogDAO {
         }
     }
 
-    public static boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath) {
-        String sql = "UPDATE purchases SET ticket_number = ?, pdf_path = ? WHERE id = ?";
+    public static boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels) {
+        String sql = "UPDATE purchases SET ticket_number = ?, pdf_path = ?, seat_labels = ? WHERE id = ?";
         try (Connection conn = Database.getConnection()) {
             ensurePurchaseReceiptColumns(conn);
             try (PreparedStatement pst = conn.prepareStatement(sql)) {
                 pst.setString(1, ticketNumber);
                 pst.setString(2, pdfPath);
-                pst.setInt(3, purchaseId);
+                pst.setString(3, seatLabels);
+                pst.setInt(4, purchaseId);
                 return pst.executeUpdate() > 0;
             }
         } catch (Exception e) {
@@ -385,6 +405,11 @@ public class TicketCatalogDAO {
         if (!columnExists(conn, "purchases", "pdf_path")) {
             try (Statement st = conn.createStatement()) {
                 st.executeUpdate("ALTER TABLE purchases ADD COLUMN pdf_path VARCHAR(500) NULL");
+            }
+        }
+        if (!columnExists(conn, "purchases", "seat_labels")) {
+            try (Statement st = conn.createStatement()) {
+                st.executeUpdate("ALTER TABLE purchases ADD COLUMN seat_labels VARCHAR(255) NULL");
             }
         }
     }

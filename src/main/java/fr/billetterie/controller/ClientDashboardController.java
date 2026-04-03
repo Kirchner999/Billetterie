@@ -36,6 +36,7 @@ import java.awt.Desktop;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -111,13 +112,16 @@ public class ClientDashboardController {
         TableColumn<Purchase, Integer> quantityColumn = new TableColumn<>("Quantite");
         quantityColumn.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().quantity()));
 
+        TableColumn<Purchase, String> seatsColumn = new TableColumn<>("Sieges");
+        seatsColumn.setCellValueFactory(cell -> new SimpleStringProperty(displaySeatLabels(cell.getValue().seatLabels())));
+
         TableColumn<Purchase, String> totalColumn = new TableColumn<>("Total");
         totalColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().total() + " EUR"));
 
         TableColumn<Purchase, String> dateColumn = new TableColumn<>("Date d'achat");
         dateColumn.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().purchaseDate())));
 
-        tableView.getColumns().setAll(eventColumn, quantityColumn, totalColumn, dateColumn);
+        tableView.getColumns().setAll(eventColumn, quantityColumn, seatsColumn, totalColumn, dateColumn);
         page.getChildren().add(tableView);
         contentPane.getChildren().setAll(page);
     }
@@ -131,7 +135,7 @@ public class ClientDashboardController {
         }
 
         List<Purchase> purchases = ticketStoreRepository.getPurchasesByUser(user.getId()).stream()
-                .filter(purchase -> purchase.ticketNumber() != null && purchase.pdfPath() != null)
+                .filter(purchase -> purchase.ticketNumber() != null && !purchase.ticketNumber().isBlank())
                 .toList();
 
         VBox page = createPageBox();
@@ -155,22 +159,30 @@ public class ClientDashboardController {
         TableColumn<Purchase, String> eventColumn = new TableColumn<>("Evenement");
         eventColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
 
-        TableColumn<Purchase, String> dateColumn = new TableColumn<>("Achat");
-        dateColumn.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().purchaseDate())));
+        TableColumn<Purchase, String> seatsColumn = new TableColumn<>("Sieges");
+        seatsColumn.setCellValueFactory(cell -> new SimpleStringProperty(displaySeatLabels(cell.getValue().seatLabels())));
 
         TableColumn<Purchase, String> pathColumn = new TableColumn<>("Fichier");
-        pathColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().pdfPath()));
+        pathColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().pdfPath() != null ? cell.getValue().pdfPath() : "Non genere"));
 
-        TableColumn<Purchase, Purchase> actionColumn = new TableColumn<>("Action");
+        TableColumn<Purchase, Purchase> actionColumn = new TableColumn<>("Actions");
         actionColumn.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue()));
         actionColumn.setCellFactory(column -> new TableCell<>() {
             private final Button openButton = new Button("Ouvrir");
+            private final Button regenerateButton = new Button("Regenerer");
+            private final HBox box = new HBox(8, openButton, regenerateButton);
 
             {
                 openButton.setOnAction(event -> {
                     Purchase purchase = getItem();
                     if (purchase != null) {
                         openPurchasePdf(purchase);
+                    }
+                });
+                regenerateButton.setOnAction(event -> {
+                    Purchase purchase = getItem();
+                    if (purchase != null) {
+                        regeneratePurchasePdf(purchase);
                     }
                 });
             }
@@ -181,12 +193,13 @@ public class ClientDashboardController {
                 if (empty || item == null) {
                     setGraphic(null);
                 } else {
-                    setGraphic(openButton);
+                    openButton.setDisable(item.pdfPath() == null || item.pdfPath().isBlank() || !Files.exists(Path.of(item.pdfPath())));
+                    setGraphic(box);
                 }
             }
         });
 
-        tableView.getColumns().setAll(ticketNumberColumn, eventColumn, dateColumn, pathColumn, actionColumn);
+        tableView.getColumns().setAll(ticketNumberColumn, eventColumn, seatsColumn, pathColumn, actionColumn);
         page.getChildren().add(tableView);
         contentPane.getChildren().setAll(page);
     }
@@ -205,7 +218,7 @@ public class ClientDashboardController {
         HBox stats = new HBox(16,
                 buildStatCard("Evenements a venir", String.valueOf(tickets.size()), "Catalogue disponible"),
                 buildStatCard("Achats effectues", String.valueOf(purchases.size()), "Historique client"),
-                buildStatCard("Billets PDF", String.valueOf(purchases.stream().filter(p -> p.pdfPath() != null).count()), "Documents retrouves" )
+                buildStatCard("Billets PDF", String.valueOf(purchases.stream().filter(p -> p.ticketNumber() != null && !p.ticketNumber().isBlank()).count()), "Documents retrouves")
         );
         page.getChildren().add(stats);
 
@@ -352,10 +365,47 @@ public class ClientDashboardController {
 
         try {
             TicketReceiptDocument receipt = ticketPdfService.generateReceipt(user, ticket, quantity, seats);
-            boolean saved = ticketStoreRepository.saveReceiptDocument(purchaseId, receipt.ticketNumber(), receipt.pdfPath().toString());
+            String seatLabels = seats == null || seats.isEmpty()
+                    ? null
+                    : seats.stream().map(Seat::displayLabel).collect(Collectors.joining(", "));
+            boolean saved = ticketStoreRepository.saveReceiptDocument(purchaseId, receipt.ticketNumber(), receipt.pdfPath().toString(), seatLabels);
             return saved ? receipt : null;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private void regeneratePurchasePdf(Purchase purchase) {
+        Client user = App.getCurrentUser();
+        if (user == null) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Aucun utilisateur connecte."));
+            return;
+        }
+
+        LocalDateTime eventDate = ticketStoreRepository.findTicketById(purchase.ticketId())
+                .map(Ticket::eventDate)
+                .orElse(null);
+
+        try {
+            TicketReceiptDocument receipt = ticketPdfService.regenerateReceipt(user, purchase, eventDate);
+            boolean saved = ticketStoreRepository.saveReceiptDocument(purchase.id(), receipt.ticketNumber(), receipt.pdfPath().toString(), purchase.seatLabels());
+            if (!saved) {
+                showPurchaseFailure(PurchaseOperationResult.failure("Le PDF a ete regenere mais la base n'a pas pu etre mise a jour."));
+                return;
+            }
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                    "Billet regenere.\nNumero: " + receipt.ticketNumber() + "\nChemin: " + receipt.pdfPath());
+            ButtonType openButton = new ButtonType("Ouvrir");
+            ButtonType closeButton = new ButtonType("Fermer");
+            alert.getButtonTypes().setAll(openButton, closeButton);
+            Optional<ButtonType> response = alert.showAndWait();
+            if (response.isPresent() && response.get() == openButton) {
+                openReceiptPath(receipt.pdfPath());
+            }
+            showMesBilletsPdf();
+        } catch (Exception e) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Impossible de regenerer le billet PDF."));
         }
     }
 
@@ -408,6 +458,10 @@ public class ClientDashboardController {
         alert.setTitle("Ouverture du billet");
         alert.setHeaderText("Le fichier existe peut-etre mais n'a pas pu etre ouvert");
         alert.showAndWait();
+    }
+
+    private String displaySeatLabels(String seatLabels) {
+        return seatLabels == null || seatLabels.isBlank() ? "Attribution libre" : seatLabels;
     }
 
     private void showPurchaseFailure(PurchaseOperationResult purchaseResult) {

@@ -5,6 +5,7 @@ import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TicketStoreRepository {
 
@@ -16,5 +17,7 @@ public interface TicketStoreRepository {
 
     PurchaseOperationResult purchaseTicket(int userId, int ticketId, List<Integer> seatIds, int quantity);
 
-    boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath);
+    boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels);
+
+    Optional<Ticket> findTicketById(int ticketId);
 }

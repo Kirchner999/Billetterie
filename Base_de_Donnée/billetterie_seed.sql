@@ -2,6 +2,7 @@ USE billetterie;
 
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS ticket_number VARCHAR(120) NULL;
 ALTER TABLE purchases ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(500) NULL;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS seat_labels VARCHAR(255) NULL;
 
 INSERT INTO tickets (event_name, event_date, price, stock) VALUES
 ('Les Miserables - Grand Rex', '2026-05-14 20:00:00', 79.90, 12),

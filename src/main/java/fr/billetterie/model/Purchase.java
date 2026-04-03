@@ -12,6 +12,7 @@ public record Purchase(
         BigDecimal total,
         LocalDateTime purchaseDate,
         String ticketNumber,
-        String pdfPath
+        String pdfPath,
+        String seatLabels
 ) {
 }

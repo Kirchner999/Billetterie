@@ -6,6 +6,7 @@ import fr.billetterie.model.Seat;
 import fr.billetterie.model.Ticket;
 
 import java.util.List;
+import java.util.Optional;
 
 public class DaoTicketStoreRepository implements TicketStoreRepository {
 
@@ -30,7 +31,12 @@ public class DaoTicketStoreRepository implements TicketStoreRepository {
     }
 
     @Override
-    public boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath) {
-        return TicketCatalogDAO.saveReceiptDocument(purchaseId, ticketNumber, pdfPath);
+    public boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels) {
+        return TicketCatalogDAO.saveReceiptDocument(purchaseId, ticketNumber, pdfPath, seatLabels);
+    }
+
+    @Override
+    public Optional<Ticket> findTicketById(int ticketId) {
+        return TicketCatalogDAO.findTicketById(ticketId);
     }
 }

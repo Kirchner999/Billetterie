@@ -7,6 +7,7 @@ import fr.billetterie.repository.TicketStoreRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -104,8 +105,13 @@ class PurchaseServiceTest {
         }
 
         @Override
-        public boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath) {
+        public boolean saveReceiptDocument(int purchaseId, String ticketNumber, String pdfPath, String seatLabels) {
             return true;
+        }
+
+        @Override
+        public Optional<fr.billetterie.model.Ticket> findTicketById(int ticketId) {
+            return Optional.empty();
         }
     }
 }
