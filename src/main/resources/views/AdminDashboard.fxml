@@ -37,16 +37,20 @@
 
                 <VBox styleClass="card" alignment="CENTER" spacing="10">
                     <Label text="Evenements" styleClass="title"/>
-                    <Label fx:id="ticketsCountLabel" text="Evenements: 0"/>
+                    <Label fx:id="ticketsCountLabel" text="Evenements actifs: 0"/>
                 </VBox>
 
                 <VBox styleClass="card" alignment="CENTER" spacing="10">
                     <Label text="Achats" styleClass="title"/>
                     <Label fx:id="purchasesCountLabel" text="Achats: 0"/>
                 </VBox>
+
+                <VBox styleClass="card" alignment="CENTER" spacing="10">
+                    <Label text="Nettoyage" styleClass="title"/>
+                    <Label fx:id="expiredCleanupLabel" text="Evenements expires supprimes: 0"/>
+                </VBox>
             </FlowPane>
         </ScrollPane>
     </center>
 
 </BorderPane>
-

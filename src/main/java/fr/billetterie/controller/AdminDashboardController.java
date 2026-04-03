@@ -12,12 +12,16 @@ public class AdminDashboardController {
     @FXML private Label usersCountLabel;
     @FXML private Label ticketsCountLabel;
     @FXML private Label purchasesCountLabel;
+    @FXML private Label expiredCleanupLabel;
 
     @FXML
     public void initialize() {
+        int deletedExpired = TicketCatalogDAO.cleanupExpiredTickets();
+
         usersCountLabel.setText("Utilisateurs: " + ClientDAO.getAll().size());
-        ticketsCountLabel.setText("Evenements: " + TicketCatalogDAO.countTickets());
+        ticketsCountLabel.setText("Evenements actifs: " + TicketCatalogDAO.countTickets());
         purchasesCountLabel.setText("Achats: " + TicketCatalogDAO.countPurchases());
+        expiredCleanupLabel.setText("Evenements expires supprimes: " + deletedExpired);
     }
 
     @FXML

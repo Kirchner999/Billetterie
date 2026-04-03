@@ -22,7 +22,12 @@ public class TicketCatalogDAO {
 
     public static List<Ticket> getAvailableTickets() {
         List<Ticket> tickets = new ArrayList<>();
-        String sql = "SELECT id, event_name, event_date, price, stock FROM tickets ORDER BY event_date ASC";
+        String sql = """
+                SELECT id, event_name, event_date, price, stock
+                FROM tickets
+                WHERE event_date >= NOW() AND stock > 0
+                ORDER BY event_date ASC
+                """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement pst = conn.prepareStatement(sql);
@@ -190,8 +195,55 @@ public class TicketCatalogDAO {
         }
     }
 
+    public static int cleanupExpiredTickets() {
+        String expiredIdsSql = "SELECT id FROM tickets WHERE event_date < NOW()";
+        String deletePurchasesSql = "DELETE FROM purchases WHERE ticket_id = ?";
+        String deleteSeatsSql = "DELETE FROM seats WHERE ticket_id = ?";
+        String deleteTicketSql = "DELETE FROM tickets WHERE id = ?";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                List<Integer> expiredIds = new ArrayList<>();
+                try (PreparedStatement pst = conn.prepareStatement(expiredIdsSql);
+                     ResultSet rs = pst.executeQuery()) {
+                    while (rs.next()) {
+                        expiredIds.add(rs.getInt("id"));
+                    }
+                }
+
+                for (Integer ticketId : expiredIds) {
+                    try (PreparedStatement pst = conn.prepareStatement(deletePurchasesSql)) {
+                        pst.setInt(1, ticketId);
+                        pst.executeUpdate();
+                    }
+                    try (PreparedStatement pst = conn.prepareStatement(deleteSeatsSql)) {
+                        pst.setInt(1, ticketId);
+                        pst.executeUpdate();
+                    }
+                    try (PreparedStatement pst = conn.prepareStatement(deleteTicketSql)) {
+                        pst.setInt(1, ticketId);
+                        pst.executeUpdate();
+                    }
+                }
+
+                conn.commit();
+                return expiredIds.size();
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur cleanupExpiredTickets()");
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
     public static int countTickets() {
-        return count("SELECT COUNT(*) FROM tickets");
+        return count("SELECT COUNT(*) FROM tickets WHERE event_date >= NOW()");
     }
 
     public static int countPurchases() {
