@@ -1,11 +1,15 @@
 package fr.billetterie.controller;
 
 import fr.billetterie.App;
-import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.model.Client;
+import fr.billetterie.repository.DaoClientRepository;
+import fr.billetterie.service.AuthService;
+import fr.billetterie.service.LoginResult;
 import fr.billetterie.utils.ThemeManager;
 import javafx.fxml.FXML;
-import javafx.scene.control.*;
+import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextField;
 
 public class LoginController {
 
@@ -13,33 +17,21 @@ public class LoginController {
     @FXML private PasswordField passwordField;
     @FXML private Label errorLabel;
 
+    private final AuthService authService = new AuthService(new DaoClientRepository());
+
     @FXML
     public void handleLogin() {
+        LoginResult result = authService.login(emailField.getText(), passwordField.getText());
+        errorLabel.setText("");
 
-        String email = emailField.getText().trim();
-        String mdp = passwordField.getText().trim();
-
-        if (email.isEmpty() || mdp.isEmpty()) {
-            errorLabel.setText("Veuillez remplir tous les champs.");
+        if (!result.success()) {
+            errorLabel.setText(result.message());
             return;
         }
 
-        Client user = ClientDAO.authenticate(email, mdp);
-
-        if (user == null) {
-            errorLabel.setText("Identifiants incorrects !");
-            return;
-        }
-
-        // Sauvegarde de l'utilisateur connecté
+        Client user = result.client();
         App.setCurrentUser(user);
-
-        // Redirection selon rôle
-        switch (user.getRole()) {
-            case "ADMIN" -> App.loadPage("AdminDashboard.fxml");
-            case "EDITEUR" -> App.loadPage("EditeurDashboard.fxml");
-            default -> App.loadPage("ClientDashboard.fxml");
-        }
+        App.loadPage(result.targetView());
     }
 
     @FXML

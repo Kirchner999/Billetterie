@@ -2,38 +2,47 @@
 
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.control.*?>
+<?import javafx.geometry.Insets?>
 
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="fr.billetterie.controller.EditeurDashboardController">
 
     <!-- SIDEBAR -->
-    <VBox styleClass="sidebar" spacing="25" prefWidth="220">
-        <Label text="Éditeur" styleClass="title"/>
+    <left>
+        <VBox styleClass="sidebar" spacing="25" prefWidth="220">
+            <padding>
+                <Insets top="20" right="10" bottom="20" left="10"/>
+            </padding>
 
-        <Button text="Gérer Spectacles"/>
-        <Button text="Gérer Représentations"/>
-        <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
-        <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
-    </VBox>
+            <Label text="Éditeur" styleClass="title"/>
+
+            <Button text="Gérer Spectacles"/>
+            <Button text="Gérer Représentations"/>
+            <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
+            <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
+        </VBox>
+    </left>
 
     <!-- CONTENT -->
-    <ScrollPane fitToWidth="true">
-        <FlowPane alignment="CENTER"
-                  hgap="25"
-                  vgap="25"
-                  padding="30">
+    <center>
+        <ScrollPane fitToWidth="true">
+            <FlowPane alignment="CENTER" hgap="25" vgap="25">
+                <padding>
+                    <Insets top="30" right="30" bottom="30" left="30"/>
+                </padding>
 
-            <VBox styleClass="card" alignment="CENTER" spacing="10">
-                <Label text="Spectacles" styleClass="title"/>
-                <Label text="Créer / modifier les spectacles"/>
-            </VBox>
+                <VBox styleClass="card" alignment="CENTER" spacing="10">
+                    <Label text="Spectacles" styleClass="title"/>
+                    <Label text="Créer / modifier les spectacles"/>
+                </VBox>
 
-            <VBox styleClass="card" alignment="CENTER" spacing="10">
-                <Label text="Représentations" styleClass="title"/>
-                <Label text="Gestion horaire + prix"/>
-            </VBox>
+                <VBox styleClass="card" alignment="CENTER" spacing="10">
+                    <Label text="Représentations" styleClass="title"/>
+                    <Label text="Gestion horaire + prix"/>
+                </VBox>
 
-        </FlowPane>
-    </ScrollPane>
+            </FlowPane>
+        </ScrollPane>
+    </center>
 
 </BorderPane>

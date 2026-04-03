@@ -5,7 +5,6 @@ import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.model.Client;
 import fr.billetterie.utils.ThemeManager;
 import javafx.fxml.FXML;
-import javafx.scene.control.Button;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.PropertyValueFactory;

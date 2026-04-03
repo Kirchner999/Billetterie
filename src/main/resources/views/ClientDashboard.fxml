@@ -1,39 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.layout.*?>
-<?import javafx.scene.control.*?>
-
-<BorderPane xmlns:fx="http://javafx.com/fxml"
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="fr.billetterie.controller.ClientDashboardController">
 
-    <!-- SIDEBAR -->
-    <VBox styleClass="sidebar" spacing="25" prefWidth="220">
-        <Label text="Mon Compte" styleClass="title"/>
+    <left>
+        <VBox styleClass="sidebar" spacing="20" prefWidth="220">
+            <Label text="Espace Client" styleClass="title"/>
 
-        <Button text="Spectacles disponibles"/>
-        <Button text="Mes billets"/>
-        <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
-        <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
-    </VBox>
+            <Button text="Spectacles disponibles" onAction="#showSpectacles"/>
+            <Button text="Mes billets" onAction="#showMesBillets"/>
+            <Button text="Changer thème" onAction="#switchTheme" styleClass="button-secondary"/>
+            <Button text="Déconnexion" onAction="#logout" styleClass="button-secondary"/>
+        </VBox>
+    </left>
 
-    <!-- CONTENT -->
-    <ScrollPane fitToWidth="true">
-        <FlowPane alignment="CENTER"
-                  hgap="25"
-                  vgap="25"
-                  padding="30">
-
-            <VBox styleClass="card" alignment="CENTER" spacing="10">
-                <Label text="Spectacles" styleClass="title"/>
-                <Label text="Voir / acheter des billets"/>
-            </VBox>
-
-            <VBox styleClass="card" alignment="CENTER" spacing="10">
-                <Label text="Mes billets" styleClass="title"/>
-                <Label text="Historique + téléchargements"/>
-            </VBox>
-
-        </FlowPane>
-    </ScrollPane>
+    <center>
+        <StackPane fx:id="contentPane"/>
+    </center>
 
 </BorderPane>
