@@ -26,6 +26,7 @@ import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
 import java.math.BigDecimal;
@@ -47,9 +48,7 @@ public class ClientDashboardController {
 
     @FXML
     public void initialize() {
-        Client user = App.getCurrentUser();
-        String nom = user != null ? user.getUsername() : "utilisateur";
-        contentPane.getChildren().setAll(new Label("Bienvenue, " + nom + " !"));
+        showClientHome();
     }
 
     @FXML
@@ -66,49 +65,38 @@ public class ClientDashboardController {
     @FXML
     public void showSpectacles() {
         List<Ticket> tickets = ticketStoreRepository.getAvailableTickets();
-        VBox box = new VBox(12);
-        box.getChildren().add(new Label("Evenements disponibles"));
+        VBox page = createPageBox();
+        page.getChildren().addAll(
+                buildSectionTitle("Evenements disponibles", tickets.size() + " spectacle(s) a venir"),
+                tickets.isEmpty() ? buildEmptyState("Aucun evenement disponible pour le moment.") : buildEventsList(tickets)
+        );
 
-        if (tickets.isEmpty()) {
-            box.getChildren().add(new Label("Aucun evenement disponible."));
-        } else {
-            for (Ticket ticket : tickets) {
-                VBox details = new VBox(6);
-                details.getChildren().addAll(
-                        new Label(ticket.eventName()),
-                        new Label("Date: " + DATE_FORMAT.format(ticket.eventDate())),
-                        new Label("Prix: " + ticket.price() + " EUR"),
-                        new Label("Stock: " + ticket.stock())
-                );
-
-                Button buyButton = new Button("Choisir mes places");
-                buyButton.setOnAction(event -> handlePurchase(ticket));
-
-                HBox row = new HBox(16, details, buyButton);
-                box.getChildren().add(row);
-            }
-        }
-
-        contentPane.getChildren().setAll(box);
+        contentPane.getChildren().setAll(page);
     }
 
     @FXML
     public void showMesBillets() {
         Client user = App.getCurrentUser();
         if (user == null) {
-            contentPane.getChildren().setAll(new Label("Aucun utilisateur connecte."));
+            contentPane.getChildren().setAll(buildEmptyState("Aucun utilisateur connecte."));
             return;
         }
 
         List<Purchase> purchases = ticketStoreRepository.getPurchasesByUser(user.getId());
+        VBox page = createPageBox();
+        page.getChildren().add(buildSectionTitle("Mes achats", purchases.size() + " operation(s) enregistree(s)"));
+
         if (purchases.isEmpty()) {
-            contentPane.getChildren().setAll(new Label("Aucun achat trouve."));
+            page.getChildren().add(buildEmptyState("Aucun achat trouve."));
+            contentPane.getChildren().setAll(page);
             return;
         }
 
         TableView<Purchase> tableView = new TableView<>();
+        tableView.getStyleClass().add("data-table");
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         tableView.setItems(FXCollections.observableArrayList(purchases));
+        VBox.setVgrow(tableView, Priority.ALWAYS);
 
         TableColumn<Purchase, String> eventColumn = new TableColumn<>("Evenement");
         eventColumn.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().eventName()));
@@ -123,7 +111,110 @@ public class ClientDashboardController {
         dateColumn.setCellValueFactory(cell -> new SimpleStringProperty(DATE_FORMAT.format(cell.getValue().purchaseDate())));
 
         tableView.getColumns().setAll(eventColumn, quantityColumn, totalColumn, dateColumn);
-        contentPane.getChildren().setAll(tableView);
+        page.getChildren().add(tableView);
+        contentPane.getChildren().setAll(page);
+    }
+
+    private void showClientHome() {
+        Client user = App.getCurrentUser();
+        List<Ticket> tickets = ticketStoreRepository.getAvailableTickets();
+        List<Purchase> purchases = user != null ? ticketStoreRepository.getPurchasesByUser(user.getId()) : List.of();
+
+        VBox page = createPageBox();
+        page.getChildren().add(buildSectionTitle(
+                "Bienvenue, " + (user != null ? user.getUsername() : "utilisateur") + "",
+                "Accede rapidement aux evenements, a tes places et a ton historique."
+        ));
+
+        HBox stats = new HBox(16,
+                buildStatCard("Evenements a venir", String.valueOf(tickets.size()), "Catalogue disponible"),
+                buildStatCard("Achats effectues", String.valueOf(purchases.size()), "Historique client"),
+                buildStatCard("Prochain evenement", tickets.isEmpty() ? "-" : DATE_FORMAT.format(tickets.getFirst().eventDate()), "Date la plus proche")
+        );
+        page.getChildren().add(stats);
+
+        if (!tickets.isEmpty()) {
+            page.getChildren().add(buildSectionTitle("A la une", "Selection rapide des prochains spectacles"));
+            page.getChildren().add(buildEventsList(tickets.stream().limit(3).toList()));
+        } else {
+            page.getChildren().add(buildEmptyState("Le catalogue est vide pour le moment."));
+        }
+
+        contentPane.getChildren().setAll(page);
+    }
+
+    private VBox buildEventsList(List<Ticket> tickets) {
+        VBox list = new VBox(14);
+        for (Ticket ticket : tickets) {
+            list.getChildren().add(buildEventCard(ticket));
+        }
+        return list;
+    }
+
+    private VBox buildEventCard(Ticket ticket) {
+        VBox card = new VBox(10);
+        card.getStyleClass().addAll("card", "event-card");
+
+        Label title = new Label(ticket.eventName());
+        title.getStyleClass().add("card-title");
+
+        Label date = new Label("Date: " + DATE_FORMAT.format(ticket.eventDate()));
+        date.getStyleClass().add("event-meta");
+
+        Label price = new Label("Prix: " + ticket.price() + " EUR");
+        price.getStyleClass().add("event-meta");
+
+        Label stock = new Label("Places restantes: " + ticket.stock());
+        stock.getStyleClass().add("event-meta");
+
+        Label status = new Label(ticket.stock() <= 5 ? "Places limitees" : "Disponible");
+        status.getStyleClass().addAll("event-status", ticket.stock() <= 5 ? "status-warning" : "status-success");
+
+        Button action = new Button("Choisir mes places");
+        action.setOnAction(event -> handlePurchase(ticket));
+
+        HBox footer = new HBox(12, status, action);
+        footer.setPadding(new Insets(6, 0, 0, 0));
+
+        card.getChildren().addAll(title, date, price, stock, footer);
+        return card;
+    }
+
+    private VBox buildSectionTitle(String titleText, String subtitleText) {
+        VBox box = new VBox(4);
+        Label title = new Label(titleText);
+        title.getStyleClass().add("section-title");
+        Label subtitle = new Label(subtitleText);
+        subtitle.getStyleClass().add("section-subtitle");
+        box.getChildren().addAll(title, subtitle);
+        return box;
+    }
+
+    private VBox buildStatCard(String title, String value, String subtitle) {
+        VBox card = new VBox(6);
+        card.getStyleClass().addAll("card", "stat-card");
+        Label titleLabel = new Label(title);
+        titleLabel.getStyleClass().add("stat-title");
+        Label valueLabel = new Label(value);
+        valueLabel.getStyleClass().add("stat-value");
+        Label subtitleLabel = new Label(subtitle);
+        subtitleLabel.getStyleClass().add("stat-subtitle");
+        card.getChildren().addAll(titleLabel, valueLabel, subtitleLabel);
+        HBox.setHgrow(card, Priority.ALWAYS);
+        return card;
+    }
+
+    private VBox buildEmptyState(String message) {
+        VBox box = new VBox();
+        box.getStyleClass().addAll("card", "empty-state");
+        box.getChildren().add(new Label(message));
+        return box;
+    }
+
+    private VBox createPageBox() {
+        VBox box = new VBox(18);
+        box.setFillWidth(true);
+        return box;
     }
 
     private void handlePurchase(Ticket ticket) {

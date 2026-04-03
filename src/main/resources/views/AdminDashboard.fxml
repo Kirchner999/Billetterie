@@ -3,21 +3,23 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
-<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="fr.billetterie.controller.AdminDashboardController">
 
     <left>
-        <VBox styleClass="sidebar" spacing="25" prefWidth="220">
+        <VBox styleClass="sidebar" spacing="20" prefWidth="220">
             <padding>
                 <Insets top="20" right="10" bottom="20" left="10"/>
             </padding>
 
             <Label text="Admin Panel" styleClass="title"/>
+            <Label text="Supervision de la billetterie" styleClass="section-subtitle" wrapText="true"/>
+            <Button text="Rafraichir" onAction="#refreshMetrics"/>
             <Button text="Changer theme" styleClass="button-secondary" onAction="#switchTheme"/>
             <Button text="Deconnexion" styleClass="button-secondary" onAction="#logout"/>
         </VBox>
@@ -25,31 +27,42 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <FlowPane alignment="CENTER" hgap="25" vgap="25">
+            <VBox spacing="18">
                 <padding>
                     <Insets top="30" right="30" bottom="30" left="30"/>
                 </padding>
 
-                <VBox styleClass="card" alignment="CENTER" spacing="10">
-                    <Label text="Utilisateurs" styleClass="title"/>
-                    <Label fx:id="usersCountLabel" text="Utilisateurs: 0"/>
+                <VBox spacing="4">
+                    <Label text="Tableau de bord admin" styleClass="section-title"/>
+                    <Label text="Vue synthese des utilisateurs, des achats et du nettoyage automatique." styleClass="section-subtitle"/>
                 </VBox>
 
-                <VBox styleClass="card" alignment="CENTER" spacing="10">
-                    <Label text="Evenements" styleClass="title"/>
-                    <Label fx:id="ticketsCountLabel" text="Evenements actifs: 0"/>
-                </VBox>
+                <FlowPane alignment="CENTER_LEFT" hgap="18" vgap="18">
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Utilisateurs" styleClass="stat-title"/>
+                        <Label fx:id="usersCountLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Comptes actifs dans users" styleClass="stat-subtitle"/>
+                    </VBox>
 
-                <VBox styleClass="card" alignment="CENTER" spacing="10">
-                    <Label text="Achats" styleClass="title"/>
-                    <Label fx:id="purchasesCountLabel" text="Achats: 0"/>
-                </VBox>
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Evenements actifs" styleClass="stat-title"/>
+                        <Label fx:id="ticketsCountLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Spectacles encore visibles au client" styleClass="stat-subtitle"/>
+                    </VBox>
 
-                <VBox styleClass="card" alignment="CENTER" spacing="10">
-                    <Label text="Nettoyage" styleClass="title"/>
-                    <Label fx:id="expiredCleanupLabel" text="Evenements expires supprimes: 0"/>
-                </VBox>
-            </FlowPane>
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Achats" styleClass="stat-title"/>
+                        <Label fx:id="purchasesCountLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Transactions historisees" styleClass="stat-subtitle"/>
+                    </VBox>
+
+                    <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
+                        <Label text="Nettoyage" styleClass="stat-title"/>
+                        <Label fx:id="expiredCleanupLabel" text="0" styleClass="stat-value"/>
+                        <Label text="Evenements expires supprimes au chargement" styleClass="stat-subtitle"/>
+                    </VBox>
+                </FlowPane>
+            </VBox>
         </ScrollPane>
     </center>
 

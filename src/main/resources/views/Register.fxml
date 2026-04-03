@@ -1,40 +1,65 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.control.*?>
-<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
 
 <StackPane xmlns:fx="http://javafx.com/fxml"
            fx:controller="fr.billetterie.controller.RegisterController"
            alignment="CENTER">
 
-    <VBox styleClass="glass"
-          alignment="CENTER"
-          spacing="20"
-          maxWidth="350">
+    <HBox alignment="CENTER" spacing="28" maxWidth="960">
+        <VBox spacing="14" maxWidth="400">
+            <Label text="Creer un compte" styleClass="section-title"/>
+            <Label text="Inscris-toi pour reserver tes places, suivre tes achats et acceder a l'espace client." styleClass="section-subtitle" wrapText="true"/>
 
-        <Label text="Creer un compte" styleClass="title"/>
+            <VBox spacing="10" styleClass="card stat-card">
+                <Label text="Bonnes pratiques" styleClass="stat-title"/>
+                <Label text="Nom d'utilisateur unique" styleClass="event-meta"/>
+                <Label text="Mot de passe de 6 caracteres minimum" styleClass="event-meta"/>
+                <Label text="Le nom complet et l'email restent optionnels" styleClass="event-meta"/>
+            </VBox>
+        </VBox>
 
-        <TextField fx:id="pseudoField"
-                   promptText="Nom d'utilisateur"/>
+        <VBox styleClass="glass"
+              alignment="CENTER_LEFT"
+              spacing="16"
+              maxWidth="380">
 
-        <TextField fx:id="nomField"
-                   promptText="Nom complet (optionnel)"/>
+            <Label text="Nouvelle inscription" styleClass="title"/>
+            <Label text="Remplis les informations essentielles pour creer ton acces." styleClass="section-subtitle" wrapText="true"/>
 
-        <TextField fx:id="emailField"
-                   promptText="Email (optionnel)"/>
+            <TextField fx:id="pseudoField"
+                       promptText="Nom d'utilisateur"/>
 
-        <PasswordField fx:id="passwordField"
-                       promptText="Mot de passe"/>
+            <TextField fx:id="nomField"
+                       promptText="Nom complet (optionnel)"/>
 
-        <Button text="S'inscrire" onAction="#handleRegister"/>
+            <TextField fx:id="emailField"
+                       promptText="Email (optionnel)"/>
 
-        <Hyperlink text="Deja un compte ? Se connecter"
-                   onAction="#goToLogin"/>
+            <PasswordField fx:id="passwordField"
+                           promptText="Mot de passe"/>
 
-        <Button text="Changer theme"
-                styleClass="button-secondary"
-                onAction="#switchTheme"/>
+            <Button text="S'inscrire" onAction="#handleRegister" maxWidth="1.7976931348623157E308"/>
 
-    </VBox>
+            <Hyperlink text="Deja un compte ? Se connecter"
+                       onAction="#goToLogin"/>
+
+            <Button text="Changer theme"
+                    styleClass="button-secondary"
+                    onAction="#switchTheme"/>
+
+            <padding>
+                <Insets top="28" right="28" bottom="28" left="28"/>
+            </padding>
+        </VBox>
+    </HBox>
 
 </StackPane>
