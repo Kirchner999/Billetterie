@@ -1,6 +1,7 @@
 package fr.billetterie.dao;
 
 import fr.billetterie.model.AdminPurchaseRecord;
+import fr.billetterie.model.AdminSeatDetail;
 import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
@@ -895,6 +896,196 @@ public class TicketCatalogDAO {
             e.printStackTrace();
             return PurchaseOperationResult.failure("Impossible de generer la rangee.");
         }
+    }
+
+    public static PurchaseOperationResult alignAllTicketStocksWithSeats() {
+        String sql = """
+                UPDATE tickets t
+                JOIN (
+                    SELECT
+                        ticket_id,
+                        COUNT(*) - COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS available_seats
+                    FROM seats
+                    GROUP BY ticket_id
+                ) seat_stats ON seat_stats.ticket_id = t.id
+                SET t.stock = seat_stats.available_seats
+                """;
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            ensurePurchaseArtifactsSchema(conn);
+            int updated = pst.executeUpdate();
+            return PurchaseOperationResult.success("Correction globale terminee sur " + updated + " spectacle(s).");
+        } catch (Exception e) {
+            System.out.println("Erreur alignAllTicketStocksWithSeats()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Impossible d'aligner globalement les stocks.");
+        }
+    }
+
+    public static PurchaseOperationResult deleteSeat(int seatId) {
+        String selectSql = "SELECT ticket_id, seat_row, seat_number, is_taken FROM seats WHERE id = ? FOR UPDATE";
+        String deleteSql = "DELETE FROM seats WHERE id = ?";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                ensurePurchaseArtifactsSchema(conn);
+                int ticketId;
+                String row;
+                int number;
+                boolean taken;
+
+                try (PreparedStatement pst = conn.prepareStatement(selectSql)) {
+                    pst.setInt(1, seatId);
+                    try (ResultSet rs = pst.executeQuery()) {
+                        if (!rs.next()) {
+                            conn.rollback();
+                            return PurchaseOperationResult.failure("Siege introuvable.");
+                        }
+                        ticketId = rs.getInt("ticket_id");
+                        row = rs.getString("seat_row");
+                        number = rs.getInt("seat_number");
+                        taken = rs.getBoolean("is_taken");
+                    }
+                }
+
+                if (taken) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Impossible de supprimer un siege deja reserve.");
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(deleteSql)) {
+                    pst.setInt(1, seatId);
+                    pst.executeUpdate();
+                }
+
+                PurchaseOperationResult syncResult = alignTicketStockWithSeatsTransactional(conn, ticketId);
+                if (!syncResult.success()) {
+                    conn.rollback();
+                    return syncResult;
+                }
+
+                conn.commit();
+                return PurchaseOperationResult.success("Siege " + row + number + " supprime.");
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur deleteSeat()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Impossible de supprimer le siege.");
+        }
+    }
+
+    public static PurchaseOperationResult deleteSeatRow(int ticketId, String rowLabel) {
+        String checkSql = "SELECT COUNT(*) AS total_count, COALESCE(SUM(CASE WHEN is_taken = 1 THEN 1 ELSE 0 END), 0) AS taken_count FROM seats WHERE ticket_id = ? AND seat_row = ?";
+        String deleteSql = "DELETE FROM seats WHERE ticket_id = ? AND seat_row = ?";
+
+        try (Connection conn = Database.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                ensurePurchaseArtifactsSchema(conn);
+                String normalizedRow = rowLabel == null ? "" : rowLabel.trim().toUpperCase();
+                int totalCount;
+                int takenCount;
+
+                try (PreparedStatement pst = conn.prepareStatement(checkSql)) {
+                    pst.setInt(1, ticketId);
+                    pst.setString(2, normalizedRow);
+                    try (ResultSet rs = pst.executeQuery()) {
+                        rs.next();
+                        totalCount = rs.getInt("total_count");
+                        takenCount = rs.getInt("taken_count");
+                    }
+                }
+
+                if (totalCount == 0) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Rangee introuvable.");
+                }
+                if (takenCount > 0) {
+                    conn.rollback();
+                    return PurchaseOperationResult.failure("Impossible de supprimer une rangee contenant des sieges reserves.");
+                }
+
+                try (PreparedStatement pst = conn.prepareStatement(deleteSql)) {
+                    pst.setInt(1, ticketId);
+                    pst.setString(2, normalizedRow);
+                    pst.executeUpdate();
+                }
+
+                PurchaseOperationResult syncResult = alignTicketStockWithSeatsTransactional(conn, ticketId);
+                if (!syncResult.success()) {
+                    conn.rollback();
+                    return syncResult;
+                }
+
+                conn.commit();
+                return PurchaseOperationResult.success("Rangee " + normalizedRow + " supprimee.");
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur deleteSeatRow()");
+            e.printStackTrace();
+            return PurchaseOperationResult.failure("Impossible de supprimer la rangee.");
+        }
+    }
+
+    public static Optional<AdminSeatDetail> findSeatDetail(int seatId) {
+        String sql = """
+                SELECT
+                    s.id AS seat_id,
+                    s.ticket_id,
+                    t.event_name,
+                    CONCAT(s.seat_row, s.seat_number) AS seat_label,
+                    s.is_taken,
+                    u.username,
+                    tf.ticket_number,
+                    COALESCE(p.status, 'CONFIRMED') AS purchase_status
+                FROM seats s
+                JOIN tickets t ON t.id = s.ticket_id
+                LEFT JOIN purchase_seats ps ON ps.purchase_id IS NOT NULL AND ps.seat_label = CONCAT(s.seat_row, s.seat_number)
+                LEFT JOIN purchases p ON p.id = ps.purchase_id AND p.ticket_id = s.ticket_id
+                LEFT JOIN users u ON u.id = p.user_id
+                LEFT JOIN ticket_files tf ON tf.purchase_id = p.id
+                WHERE s.id = ?
+                ORDER BY p.purchase_date DESC
+                LIMIT 1
+                """;
+
+        try (Connection conn = Database.getConnection()) {
+            ensurePurchaseArtifactsSchema(conn);
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setInt(1, seatId);
+                try (ResultSet rs = pst.executeQuery()) {
+                    if (rs.next()) {
+                        return Optional.of(new AdminSeatDetail(
+                                rs.getInt("seat_id"),
+                                rs.getInt("ticket_id"),
+                                rs.getString("event_name"),
+                                rs.getString("seat_label"),
+                                rs.getBoolean("is_taken"),
+                                rs.getString("username"),
+                                rs.getString("ticket_number"),
+                                rs.getString("purchase_status")
+                        ));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur findSeatDetail()");
+            e.printStackTrace();
+        }
+
+        return Optional.empty();
     }
 
     public static PurchaseOperationResult cancelPurchase(int purchaseId) {

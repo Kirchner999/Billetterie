@@ -162,6 +162,9 @@
                     <HBox spacing="12">
                         <Button text="Aligner le stock sur les sieges" styleClass="button-secondary" onAction="#alignSelectedSeatStock"/>
                         <Button text="Generer une rangee" styleClass="button-secondary" onAction="#generateSeatsForSelectedEvent"/>
+                        <Button fx:id="deleteRowButton" text="Supprimer la rangee" styleClass="button-secondary" onAction="#deleteSelectedRow" disable="true"/>
+                        <Button fx:id="deleteSeatButton" text="Supprimer le siege" styleClass="button-secondary" onAction="#deleteSelectedSeat" disable="true"/>
+                        <Button fx:id="alignAllSeatStocksButton" text="Correction globale" styleClass="button-secondary" onAction="#alignAllSeatStocks"/>
                     </HBox>
 
                     <VBox spacing="6">
@@ -199,6 +202,25 @@
                     </TableView>
 
                     <HBox fx:id="seatHeatmapLegend" spacing="10"/>
+
+                    <FlowPane hgap="18" vgap="10">
+                        <VBox spacing="4">
+                            <Label text="Siege selectionne" styleClass="stat-title"/>
+                            <Label fx:id="selectedSeatLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Etat" styleClass="stat-title"/>
+                            <Label fx:id="selectedSeatStatusLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Utilisateur" styleClass="stat-title"/>
+                            <Label fx:id="selectedSeatOwnerLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                        <VBox spacing="4">
+                            <Label text="Numero billet" styleClass="stat-title"/>
+                            <Label fx:id="selectedSeatTicketNumberLabel" text="-" styleClass="section-subtitle"/>
+                        </VBox>
+                    </FlowPane>
 
                     <VBox fx:id="seatHeatmapContainer" spacing="10"/>
                 </VBox>

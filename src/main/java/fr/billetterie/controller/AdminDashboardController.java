@@ -4,6 +4,7 @@ import fr.billetterie.App;
 import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.dao.TicketCatalogDAO;
 import fr.billetterie.model.AdminPurchaseRecord;
+import fr.billetterie.model.AdminSeatDetail;
 import fr.billetterie.model.AdminRowOccupancyStat;
 import fr.billetterie.model.AdminSalesStat;
 import fr.billetterie.model.AdminSalesTimelinePoint;
@@ -83,6 +84,10 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminSeatConsistencyIssue, Integer> colConsistencyStock;
     @FXML private TableColumn<AdminSeatConsistencyIssue, Integer> colConsistencyAvailable;
     @FXML private TableColumn<AdminSeatConsistencyIssue, Integer> colConsistencyDelta;
+    @FXML private Label selectedSeatLabel;
+    @FXML private Label selectedSeatStatusLabel;
+    @FXML private Label selectedSeatOwnerLabel;
+    @FXML private Label selectedSeatTicketNumberLabel;
     @FXML private TableView<AdminRowOccupancyStat> rowOccupancyTable;
     @FXML private TableColumn<AdminRowOccupancyStat, String> colRowLabel;
     @FXML private TableColumn<AdminRowOccupancyStat, Integer> colRowTotal;
@@ -91,6 +96,9 @@ public class AdminDashboardController {
     @FXML private TableColumn<AdminRowOccupancyStat, String> colRowRate;
     @FXML private HBox seatHeatmapLegend;
     @FXML private VBox seatHeatmapContainer;
+    @FXML private Button deleteSeatButton;
+    @FXML private Button deleteRowButton;
+    @FXML private Button alignAllSeatStocksButton;
 
     @FXML private TableView<AdminPurchaseRecord> purchasesTable;
     @FXML private TableColumn<AdminPurchaseRecord, String> colPurchaseUser;
@@ -164,6 +172,8 @@ public class AdminDashboardController {
     private final EventManagementService eventManagementService = new EventManagementService(new DaoTicketAdminRepository());
     private int selectedTicketId;
     private int selectedPurchaseId;
+    private Integer selectedSeatId;
+    private String selectedRowLabel;
     private String purchaseFilterMode = "all";
     private String purchaseSearchText = "";
     private String auditSearchText = "";
@@ -284,6 +294,46 @@ public class AdminDashboardController {
         }
 
         PurchaseOperationResult result = TicketCatalogDAO.generateSeatsForRow(ticketId, rowAnswer.get(), seatCount);
+        showResult(result.success(), result.message());
+        if (result.success()) {
+            refreshAdminView();
+        }
+    }
+
+    @FXML
+    public void deleteSelectedSeat() {
+        if (selectedSeatId == null) {
+            showResult(false, "Clique d'abord sur un siege dans la heatmap.");
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.deleteSeat(selectedSeatId);
+        showResult(result.success(), result.message());
+        if (result.success()) {
+            selectedSeatId = null;
+            refreshAdminView();
+        }
+    }
+
+    @FXML
+    public void deleteSelectedRow() {
+        int ticketId = resolveSelectedTicketId();
+        if (ticketId == 0 || selectedRowLabel == null || selectedRowLabel.isBlank()) {
+            showResult(false, "Selectionne une rangee via la table ou la heatmap.");
+            return;
+        }
+
+        PurchaseOperationResult result = TicketCatalogDAO.deleteSeatRow(ticketId, selectedRowLabel);
+        showResult(result.success(), result.message());
+        if (result.success()) {
+            selectedSeatId = null;
+            refreshAdminView();
+        }
+    }
+
+    @FXML
+    public void alignAllSeatStocks() {
+        PurchaseOperationResult result = TicketCatalogDAO.alignAllTicketStocksWithSeats();
         showResult(result.success(), result.message());
         if (result.success()) {
             refreshAdminView();
@@ -690,6 +740,12 @@ public class AdminDashboardController {
             colRowTaken.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().takenSeats()));
             colRowAvailable.setCellValueFactory(cell -> new ReadOnlyObjectWrapper<>(cell.getValue().availableSeats()));
             colRowRate.setCellValueFactory(cell -> new SimpleStringProperty(formatPercent(cell.getValue().occupancyRate())));
+            rowOccupancyTable.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+                if (newValue != null) {
+                    selectedRowLabel = newValue.rowLabel();
+                    updateSeatActionButtons();
+                }
+            });
         }
 
         if (consistencyTable != null) {
@@ -710,6 +766,8 @@ public class AdminDashboardController {
                     buildLegendChip("Pris", "seat-button", "seat-button-taken")
             );
         }
+
+        updateSelectedSeatDetails(null);
     }
 
     private void configurePurchasesTable() {
@@ -827,12 +885,19 @@ public class AdminDashboardController {
         if (ticketId <= 0) {
             rowOccupancyTable.setItems(FXCollections.observableArrayList());
             occupancySelectedEventLabel.setText("-");
+            selectedSeatId = null;
+            selectedRowLabel = null;
+            updateSelectedSeatDetails(null);
+            updateSeatActionButtons();
             renderSeatHeatmap(List.of());
             return;
         }
 
         occupancySelectedEventLabel.setText(eventName != null ? eventName : "-");
         rowOccupancyTable.setItems(FXCollections.observableArrayList(TicketCatalogDAO.getRowOccupancyStats(ticketId)));
+        selectedSeatId = null;
+        updateSelectedSeatDetails(null);
+        updateSeatActionButtons();
         renderSeatHeatmap(TicketCatalogDAO.getAvailableSeats(ticketId));
     }
 
@@ -1076,6 +1141,7 @@ public class AdminDashboardController {
         chip.setPrefWidth(68);
         chip.setAlignment(Pos.CENTER);
         chip.setPadding(new Insets(8, 10, 8, 10));
+        chip.setOnMouseClicked(event -> handleSeatClick(seat));
         return chip;
     }
 
@@ -1084,6 +1150,41 @@ public class AdminDashboardController {
         chip.getStyleClass().addAll(styleClasses);
         chip.setPadding(new Insets(6, 10, 6, 10));
         return chip;
+    }
+
+    private void handleSeatClick(Seat seat) {
+        selectedSeatId = seat.id();
+        selectedRowLabel = seat.seatRow();
+        updateSelectedSeatDetails(TicketCatalogDAO.findSeatDetail(seat.id()).orElse(null));
+        updateSeatActionButtons();
+    }
+
+    private void updateSelectedSeatDetails(AdminSeatDetail detail) {
+        if (selectedSeatLabel == null) {
+            return;
+        }
+
+        if (detail == null) {
+            selectedSeatLabel.setText("-");
+            selectedSeatStatusLabel.setText("-");
+            selectedSeatOwnerLabel.setText("-");
+            selectedSeatTicketNumberLabel.setText("-");
+            return;
+        }
+
+        selectedSeatLabel.setText(detail.seatLabel());
+        selectedSeatStatusLabel.setText(detail.taken() ? "Pris" : "Libre");
+        selectedSeatOwnerLabel.setText(detail.username() != null ? detail.username() : "-");
+        selectedSeatTicketNumberLabel.setText(detail.ticketNumber() != null ? detail.ticketNumber() : "-");
+    }
+
+    private void updateSeatActionButtons() {
+        if (deleteSeatButton != null) {
+            deleteSeatButton.setDisable(selectedSeatId == null);
+        }
+        if (deleteRowButton != null) {
+            deleteRowButton.setDisable(selectedRowLabel == null || selectedRowLabel.isBlank() || resolveSelectedTicketId() == 0);
+        }
     }
 
     private boolean matchesPurchaseSearch(AdminPurchaseRecord purchase, String searchText) {
