@@ -6,7 +6,7 @@
 <AnchorPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="fr.billetterie.app.controller.MainController">
 
-    <Button text="Hello Billetterie" layoutX="50" layoutY="50"
+    <Button text="Hello Dispelltacle" layoutX="50" layoutY="50"
             onAction="#onClick"/>
 
 </AnchorPane>

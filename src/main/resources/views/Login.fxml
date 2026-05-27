@@ -16,7 +16,7 @@
 
     <HBox alignment="CENTER" spacing="28" maxWidth="920">
         <VBox spacing="14" maxWidth="380">
-            <Label text="Billetterie Live" styleClass="section-title"/>
+            <Label text="Dispelltacle" styleClass="section-title"/>
             <Label text="Connecte-toi pour acheter des places, choisir tes sieges et retrouver ton historique d'achats." styleClass="section-subtitle" wrapText="true"/>
 
             <VBox spacing="10" styleClass="card stat-card">

@@ -23,7 +23,7 @@ public class App extends Application {
         ThemeManager.applyTheme(scene);
 
         stage.setScene(scene);
-        stage.setTitle("Billetterie");
+        stage.setTitle("Dispelltacle");
         stage.show();
     }
 

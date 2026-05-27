@@ -1,8 +1,8 @@
-# Billetterie
+﻿# Dispelltacle
 
 ## Description du projet
 
-Le projet **Billetterie** gere la vente, la reservation et le suivi de billets pour des spectacles.
+Le projet **Dispelltacle** gere la vente, la reservation et le suivi de billets pour des spectacles.
 Il s'inscrit dans le cadre du **BTS SIO SLAM** et couvre la base de donnees, les services Java et l'interface JavaFX.
 
 Fonctionnalites principales :

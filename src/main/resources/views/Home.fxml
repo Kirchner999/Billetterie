@@ -12,7 +12,7 @@
       fx:controller="fr.billetterie.controller.HomeController"
       style="-fx-background-color: #f0f0f0;">
     
-    <Label text="Gestion Billetterie"
+    <Label text="Gestion Dispelltacle"
            style="-fx-text-fill: #333;">
         <font>
             <Font size="32"/>

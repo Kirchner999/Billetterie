@@ -28,7 +28,7 @@ public class HomeController {
             Parent root = loader.load();
 
             Stage stage = new Stage();
-            stage.setTitle("Billetterie - " + fxmlFile.replace(".fxml", ""));
+            stage.setTitle("Dispelltacle - " + fxmlFile.replace(".fxml", ""));
             stage.setScene(new Scene(root));
             stage.show();
         } catch (Exception ex) {
