@@ -28,9 +28,9 @@
 
             <Label text="Admin Panel" styleClass="title"/>
             <Label text="Pilotage des spectacles, achats et journaux de billets." styleClass="section-subtitle" wrapText="true"/>
-            <Button text="Rafraichir" onAction="#refreshMetrics"/>
-            <Button text="Changer theme" styleClass="button-secondary" onAction="#switchTheme"/>
-            <Button text="Deconnexion" styleClass="button-secondary" onAction="#logout"/>
+            <Button text="Rafraîchir" onAction="#refreshMetrics"/>
+            <Button text="Changer thème" styleClass="button-secondary" onAction="#switchTheme"/>
+            <Button text="Déconnexion" styleClass="button-secondary" onAction="#logout"/>
         </VBox>
     </left>
 
@@ -54,13 +54,13 @@
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
-                        <Label text="Evenements actifs" styleClass="stat-title"/>
+                    <Label text="Événements actifs" styleClass="stat-title"/>
                         <Label fx:id="ticketsCountLabel" text="0" styleClass="stat-value"/>
                         <Label text="Spectacles encore visibles au client" styleClass="stat-subtitle"/>
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
-                        <Label text="Achats confirmes" styleClass="stat-title"/>
+                        <Label text="Achats confirmés" styleClass="stat-title"/>
                         <Label fx:id="purchasesCountLabel" text="0" styleClass="stat-value"/>
                         <Label text="Reservations encore actives" styleClass="stat-subtitle"/>
                     </VBox>
@@ -68,31 +68,31 @@
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
                         <Label text="Annulations" styleClass="stat-title"/>
                         <Label fx:id="cancelledCountLabel" text="0" styleClass="stat-value"/>
-                        <Label text="Achats annules avec remise en stock" styleClass="stat-subtitle"/>
+                        <Label text="Achats annulés avec remise en stock" styleClass="stat-subtitle"/>
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
                         <Label text="Remboursements" styleClass="stat-title"/>
                         <Label fx:id="refundedCountLabel" text="0" styleClass="stat-value"/>
-                        <Label text="Achats rembourss avec remise en stock" styleClass="stat-subtitle"/>
+                        <Label text="Achats remboursés avec remise en stock" styleClass="stat-subtitle"/>
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
                         <Label text="Nettoyage" styleClass="stat-title"/>
                         <Label fx:id="expiredCleanupLabel" text="0" styleClass="stat-value"/>
-                        <Label text="Evenements expires supprimes au chargement" styleClass="stat-subtitle"/>
+                        <Label text="Événements expirés supprimés au chargement" styleClass="stat-subtitle"/>
                     </VBox>
 
                     <VBox styleClass="card stat-card" alignment="CENTER_LEFT" spacing="8">
                         <Label text="Ecarts stock" styleClass="stat-title"/>
                         <Label fx:id="seatMismatchCountLabel" text="0" styleClass="stat-value"/>
-                        <Label text="Ecarts entre stock affiche et sieges libres" styleClass="stat-subtitle"/>
+                        <Label text="Écarts entre stock affiché et sièges libres" styleClass="stat-subtitle"/>
                     </VBox>
                 </FlowPane>
 
                 <VBox styleClass="card" spacing="14">
                     <Label text="Stats de vente par spectacle" styleClass="section-title"/>
-                    <Label text="Vue agregee des achats confirmes, remboursements, annulations, billets vendus et chiffre d'affaires." styleClass="section-subtitle" wrapText="true"/>
+                    <Label text="Vue agrégée des achats confirmés, remboursements, annulations, billets vendus et chiffre d'affaires." styleClass="section-subtitle" wrapText="true"/>
 
                     <HBox spacing="12">
                         <Button fx:id="salesPeriodAllButton" text="Tout" styleClass="button-secondary" onAction="#showAllSalesPeriod"/>
@@ -102,7 +102,7 @@
                     </HBox>
 
                     <HBox spacing="16">
-                        <BarChart fx:id="salesRevenueChart" title="Top CA confirmes" prefHeight="260" prefWidth="420" animated="false">
+                        <BarChart fx:id="salesRevenueChart" title="Top CA confirmés" prefHeight="260" prefWidth="420" animated="false">
                             <xAxis>
                                 <CategoryAxis label="Spectacles"/>
                             </xAxis>
@@ -146,7 +146,7 @@
 
                 <VBox styleClass="card" spacing="14">
                     <Label text="Occupation de la salle" styleClass="section-title"/>
-                    <Label text="Lecture operationnelle des places prises et libres, par spectacle puis par rangee." styleClass="section-subtitle" wrapText="true"/>
+                    <Label text="Lecture opérationnelle des places prises et libres, par spectacle puis par rangée." styleClass="section-subtitle" wrapText="true"/>
 
                     <HBox spacing="18">
                         <VBox spacing="6">
@@ -160,7 +160,7 @@
                     </HBox>
 
                     <HBox spacing="12">
-                        <Button text="Aligner le stock sur les sieges" styleClass="button-secondary" onAction="#alignSelectedSeatStock"/>
+                        <Button text="Aligner le stock sur les sièges" styleClass="button-secondary" onAction="#alignSelectedSeatStock"/>
                         <Button text="Generer une rangee" styleClass="button-secondary" onAction="#generateSeatsForSelectedEvent"/>
                         <Button fx:id="deleteRowButton" text="Supprimer la rangee" styleClass="button-secondary" onAction="#deleteSelectedRow" disable="true"/>
                         <Button fx:id="deleteSeatButton" text="Supprimer le siege" styleClass="button-secondary" onAction="#deleteSelectedSeat" disable="true"/>
@@ -168,8 +168,8 @@
                     </HBox>
 
                     <VBox spacing="6">
-                        <Label text="Controle de coherence" styleClass="stat-title"/>
-                        <Label fx:id="consistencySummaryLabel" text="Aucune incoherence detectee entre le stock et les sieges libres." styleClass="section-subtitle" wrapText="true"/>
+                        <Label text="Contrôle de cohérence" styleClass="stat-title"/>
+                        <Label fx:id="consistencySummaryLabel" text="Aucune incohérence détectée entre le stock et les sièges libres." styleClass="section-subtitle" wrapText="true"/>
                     </VBox>
 
                     <TableView fx:id="consistencyTable" prefHeight="180" styleClass="data-table">
@@ -205,7 +205,7 @@
 
                     <FlowPane hgap="18" vgap="10">
                         <VBox spacing="4">
-                            <Label text="Siege selectionne" styleClass="stat-title"/>
+                            <Label text="Siège sélectionné" styleClass="stat-title"/>
                             <Label fx:id="selectedSeatLabel" text="-" styleClass="section-subtitle"/>
                         </VBox>
                         <VBox spacing="4">
@@ -227,7 +227,7 @@
 
                 <VBox styleClass="card" spacing="14">
                     <Label text="Gestion des evenements" styleClass="section-title"/>
-                    <Label text="Selectionne une ligne pour modifier un evenement existant, ou remplis le formulaire pour en creer un nouveau." styleClass="section-subtitle" wrapText="true"/>
+                    <Label text="Sélectionne une ligne pour modifier un événement existant, ou remplis le formulaire pour en créer un nouveau." styleClass="section-subtitle" wrapText="true"/>
 
                     <TableView fx:id="eventsTable" prefHeight="260" styleClass="data-table">
                         <columns>
@@ -287,8 +287,8 @@
                     </TableView>
 
                     <HBox spacing="12">
-                        <Button text="Annuler l'achat selectionne" styleClass="button-secondary" onAction="#cancelSelectedPurchase"/>
-                        <Button text="Rembourser l'achat selectionne" styleClass="button-secondary" onAction="#refundSelectedPurchase"/>
+                        <Button text="Annuler l'achat sélectionné" styleClass="button-secondary" onAction="#cancelSelectedPurchase"/>
+                        <Button text="Rembourser l'achat sélectionné" styleClass="button-secondary" onAction="#refundSelectedPurchase"/>
                         <Button text="Exporter achats CSV" styleClass="button-secondary" onAction="#exportPurchasesCsv"/>
                     </HBox>
 

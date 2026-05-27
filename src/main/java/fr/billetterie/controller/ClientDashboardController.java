@@ -114,7 +114,7 @@ public class ClientDashboardController {
         List<Ticket> visibleTickets = filterTickets(tickets, searchText, filterMode, sortMode);
 
         VBox page = createPageBox();
-        page.getChildren().add(buildSectionTitle("Evenements disponibles", tickets.size() + " spectacle(s) a venir"));
+        page.getChildren().add(buildSectionTitle("Événements disponibles", tickets.size() + " spectacle(s) à venir"));
         page.getChildren().add(buildSpectaclesToolbar(tickets, searchText, filterMode, sortMode, visibleTickets.size()));
         page.getChildren().add(buildSpectaclesStats(visibleTickets));
 
@@ -367,7 +367,7 @@ public class ClientDashboardController {
         ));
 
         HBox stats = new HBox(16,
-                buildStatCard("Evenements a venir", String.valueOf(tickets.size()), "Catalogue disponible"),
+                buildStatCard("Événements à venir", String.valueOf(tickets.size()), "Catalogue disponible"),
                 buildStatCard("Achats effectues", String.valueOf(purchases.size()), "Historique client"),
                 buildStatCard("Billets PDF", String.valueOf(purchases.stream().filter(p -> p.ticketNumber() != null && !p.ticketNumber().isBlank()).count()), "Documents retrouves")
         );
@@ -866,7 +866,7 @@ public class ClientDashboardController {
             }
             showMesBilletsPdf();
         } catch (Exception e) {
-            showPurchaseFailure(PurchaseOperationResult.failure("Impossible de creer l'archive ZIP."));
+            showPurchaseFailure(PurchaseOperationResult.failure("Impossible de créer l'archive ZIP."));
         }
     }
 
@@ -951,13 +951,13 @@ public class ClientDashboardController {
 
     private List<Seat> askSeatSelection(Ticket ticket, List<Seat> seats) {
         Dialog<List<Seat>> dialog = new Dialog<>();
-        dialog.setTitle("Choix des sieges");
-        dialog.setHeaderText("Selectionne tes sieges pour " + ticket.eventName());
+        dialog.setTitle("Choix des sièges");
+        dialog.setHeaderText("Sélectionne tes sièges pour " + ticket.eventName());
 
         VBox wrapper = new VBox(12);
         wrapper.setPadding(new Insets(10));
 
-        Label instructions = new Label("Les sieges grises sont deja pris. Clique sur les places libres.");
+        Label instructions = new Label("Les sièges grisés sont déjà pris. Clique sur les places libres.");
         instructions.getStyleClass().add("seat-instructions");
 
         FlowPane grid = new FlowPane();

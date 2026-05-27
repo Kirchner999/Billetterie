@@ -403,15 +403,15 @@ public class TicketCatalogDAO {
                 if (totalSeatCount > 0) {
                     if (seatIds == null || seatIds.isEmpty()) {
                         conn.rollback();
-                        return PurchaseOperationResult.failure("Choisis des sieges pour cet evenement.");
+                        return PurchaseOperationResult.failure("Choisis des sièges pour cet événement.");
                     }
                     if (seatIds.size() != quantity) {
                         conn.rollback();
-                        return PurchaseOperationResult.failure("Le nombre de sieges choisis doit correspondre a la quantite.");
+                        return PurchaseOperationResult.failure("Le nombre de sièges choisis doit correspondre à la quantité.");
                     }
                     if (!selectedSeatsAreAvailable(conn, ticketId, seatIds)) {
                         conn.rollback();
-                        return PurchaseOperationResult.failure("Un ou plusieurs sieges selectionnes ne sont plus disponibles.");
+                        return PurchaseOperationResult.failure("Un ou plusieurs sièges sélectionnés ne sont plus disponibles.");
                     }
                 }
 
@@ -932,7 +932,7 @@ public class TicketCatalogDAO {
         } catch (Exception e) {
             System.out.println("Erreur alignTicketStockWithSeats()");
             e.printStackTrace();
-            return PurchaseOperationResult.failure("Impossible d'aligner le stock avec les sieges.");
+            return PurchaseOperationResult.failure("Impossible d'aligner le stock avec les sièges.");
         }
     }
 
@@ -941,7 +941,7 @@ public class TicketCatalogDAO {
             return PurchaseOperationResult.failure("Le nom de rangee est obligatoire.");
         }
         if (seatCount <= 0) {
-            return PurchaseOperationResult.failure("Le nombre de sieges doit etre superieur a 0.");
+            return PurchaseOperationResult.failure("Le nombre de sièges doit être supérieur à 0.");
         }
 
         String maxSeatSql = "SELECT COALESCE(MAX(seat_number), 0) FROM seats WHERE ticket_id = ? AND seat_row = ?";
@@ -979,7 +979,7 @@ public class TicketCatalogDAO {
                 }
 
                 conn.commit();
-                return PurchaseOperationResult.success("Rangee " + normalizedRow + " generee avec " + seatCount + " sieges.");
+                return PurchaseOperationResult.success("Rangée " + normalizedRow + " générée avec " + seatCount + " sièges.");
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
@@ -1001,7 +1001,7 @@ public class TicketCatalogDAO {
             return PurchaseOperationResult.failure("Le nombre de rangees doit etre superieur a 0.");
         }
         if (seatsPerRow <= 0) {
-            return PurchaseOperationResult.failure("Le nombre de sieges par rangee doit etre superieur a 0.");
+            return PurchaseOperationResult.failure("Le nombre de sièges par rangée doit être supérieur à 0.");
         }
 
         String normalizedStart = startRowLabel.trim().toUpperCase();
@@ -1160,7 +1160,7 @@ public class TicketCatalogDAO {
                 }
                 if (takenCount > 0) {
                     conn.rollback();
-                    return PurchaseOperationResult.failure("Impossible de supprimer une rangee contenant des sieges reserves.");
+                    return PurchaseOperationResult.failure("Impossible de supprimer une rangée contenant des sièges réservés.");
                 }
 
                 try (PreparedStatement pst = conn.prepareStatement(deleteSql)) {
@@ -1719,7 +1719,7 @@ public class TicketCatalogDAO {
             if (updated == 0) {
                 return PurchaseOperationResult.failure("Aucun plan de salle a aligner pour cet evenement.");
             }
-            return PurchaseOperationResult.success("Stock aligne sur le nombre reel de sieges libres.");
+            return PurchaseOperationResult.success("Stock aligné sur le nombre réel de sièges libres.");
         }
     }
 

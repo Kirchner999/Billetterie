@@ -22,7 +22,7 @@
             <VBox spacing="10" styleClass="card stat-card">
                 <Label text="Bonnes pratiques" styleClass="stat-title"/>
                 <Label text="Nom d'utilisateur unique" styleClass="event-meta"/>
-                <Label text="Mot de passe de 6 caracteres minimum" styleClass="event-meta"/>
+                <Label text="Mot de passe de 6 caractères minimum" styleClass="event-meta"/>
                 <Label text="Le nom complet et l'email restent optionnels" styleClass="event-meta"/>
             </VBox>
         </VBox>
@@ -33,7 +33,7 @@
               maxWidth="380">
 
             <Label text="Nouvelle inscription" styleClass="title"/>
-            <Label text="Remplis les informations essentielles pour creer ton acces." styleClass="section-subtitle" wrapText="true"/>
+            <Label text="Remplis les informations essentielles pour créer ton accès." styleClass="section-subtitle" wrapText="true"/>
 
             <TextField fx:id="pseudoField"
                        promptText="Nom d'utilisateur"/>
@@ -52,7 +52,7 @@
             <Hyperlink text="Deja un compte ? Se connecter"
                        onAction="#goToLogin"/>
 
-            <Button text="Changer theme"
+            <Button text="Changer thème"
                     styleClass="button-secondary"
                     onAction="#switchTheme"/>
 

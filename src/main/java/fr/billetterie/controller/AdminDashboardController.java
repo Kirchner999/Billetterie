@@ -929,7 +929,7 @@ public class AdminDashboardController {
         consistencyTable.setItems(FXCollections.observableArrayList(issues));
         if (consistencySummaryLabel != null) {
             consistencySummaryLabel.setText(issues.isEmpty()
-                    ? "Aucune incoherence detectee entre le stock et les sieges libres."
+                    ? "Aucune incohérence détectée entre le stock et les sièges libres."
                     : issues.size() + " evenement(s) a corriger.");
         }
     }

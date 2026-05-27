@@ -1,13 +1,13 @@
 USE dispelltacle;
 
 INSERT INTO client (pseudo, nom, prenom, numero, email, password, adresse, role, is_admin) VALUES
-('azdine75', 'Achari', 'Maxime-Azdine', '0612345678', 'maxime.azdine@example.com', 'pass123', '34 bis rue du Cotentin, Paris', 'ADMIN', 1),
-('marie_du93', 'Dupont', 'Marie', '0678123456', 'marie.dupont@example.com', 'mdp123', '12 rue de la Republique, Saint-Denis', 'CLIENT', 0),
-('jordanL', 'Lemaire', 'Jordan', '0654321987', 'jordan.lemaire@example.com', 'secret', '45 avenue Victor Hugo, Levallois', 'CLIENT', 0),
-('khali_off', 'Benali', 'Khalid', '0644556677', 'khali@example.com', 'khali44', '9 rue du Soleil, Nanterre', 'CLIENT', 0),
-('mateo_dev', 'Terqui', 'Mateo', '0666778899', 'mateo.terqui@example.com', 'slam2025', '78 rue du Code, Paris', 'EDITEUR', 0),
-('sorayaA', 'Abdallah', 'Soraya', '0633345566', 'soraya.abdallah@example.com', 'soso456', '56 boulevard Haussmann, Paris', 'CLIENT', 0),
-('admin2', 'Durand', 'Paul', '0699001122', 'paul.durand@example.com', 'rootroot', '4 rue Centrale, Lyon', 'ADMIN', 1);
+('azdine75', 'Achari', 'Maxime-Azdine', '0612345678', 'maxime.azdine@example.com', 'sha256:9b8769a4a742959a2d0298c36fb70623f2dfacda8436237df08d8dfd5b37374c', '34 bis rue du Cotentin, Paris', 'ADMIN', 1),
+('marie_du93', 'Dupont', 'Marie', '0678123456', 'marie.dupont@example.com', 'sha256:2f81cba8c3e6f76972a8a3991fd5980eb77515f1fc9d05e5e094e1b82f457776', '12 rue de la Republique, Saint-Denis', 'CLIENT', 0),
+('jordanL', 'Lemaire', 'Jordan', '0654321987', 'jordan.lemaire@example.com', 'sha256:2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b', '45 avenue Victor Hugo, Levallois', 'CLIENT', 0),
+('khali_off', 'Benali', 'Khalid', '0644556677', 'khali@example.com', 'sha256:9a00e0857486f5cd5c29914bea7c12bbd261ea240a83f0022cff45179da895f4', '9 rue du Soleil, Nanterre', 'CLIENT', 0),
+('mateo_dev', 'Terqui', 'Mateo', '0666778899', 'mateo.terqui@example.com', 'sha256:7c640f94d6e482508327c18778187da3411d990330d4fbcd75cae253c3eff29b', '78 rue du Code, Paris', 'EDITEUR', 0),
+('sorayaA', 'Abdallah', 'Soraya', '0633345566', 'soraya.abdallah@example.com', 'sha256:69074aa1a18aa1f6658f2cd0b7277ec9471ae8eb061c8fa52a9ecfb3832dcad3', '56 boulevard Haussmann, Paris', 'CLIENT', 0),
+('admin2', 'Durand', 'Paul', '0699001122', 'paul.durand@example.com', 'sha256:0242c0436daa4c241ca8a793764b7dfb50c223121bb844cf49be670a3af4dd18', '4 rue Centrale, Lyon', 'ADMIN', 1);
 
 INSERT INTO spectacle (titre, lieu, affiche, tags, duree, description_courte, description_longue, langue, age_minimum, photos) VALUES
 ('Le Roi Lion', 'Theatre Mogador, Paris', 'affiche_roi_lion.jpg', 'famille,musical', 150, 'Comedie musicale legendaire', 'La celebre comedie musicale adaptee du film culte Disney.', 'Francais', 6, 'photo1.jpg'),
