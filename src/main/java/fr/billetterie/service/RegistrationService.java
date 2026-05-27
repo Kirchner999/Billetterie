@@ -22,19 +22,19 @@ public class RegistrationService {
         }
 
         if (normalizedUsername.length() < 3) {
-            return RegistrationResult.failure("Le nom d'utilisateur doit contenir au moins 3 caracteres.");
+            return RegistrationResult.failure("Le nom d'utilisateur doit contenir au moins 3 caract\u00E8res.");
         }
 
         if (normalizedPassword.length() < 6) {
-            return RegistrationResult.failure("Le mot de passe doit contenir au moins 6 caracteres.");
+            return RegistrationResult.failure("Le mot de passe doit contenir au moins 6 caract\u00E8res.");
         }
 
         if (!normalizedEmail.isEmpty() && !normalizedEmail.contains("@")) {
-            return RegistrationResult.failure("L'email n'est pas valide.");
+            return RegistrationResult.failure("L'e-mail n'est pas valide.");
         }
 
         if (clientRepository.usernameExists(normalizedUsername)) {
-            return RegistrationResult.failure("Ce nom d'utilisateur est deja utilise !");
+            return RegistrationResult.failure("Ce nom d'utilisateur est d\u00E9j\u00E0 utilis\u00E9 !");
         }
 
         Client client = new Client(
@@ -52,7 +52,7 @@ public class RegistrationService {
             return RegistrationResult.failure("Erreur lors de l'inscription.");
         }
 
-        return RegistrationResult.success("Inscription reussie !");
+        return RegistrationResult.success("Inscription r\u00E9ussie !");
     }
 
     private String normalize(String value) {

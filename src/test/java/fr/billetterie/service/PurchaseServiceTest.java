@@ -1,4 +1,4 @@
-﻿package fr.billetterie.service;
+package fr.billetterie.service;
 
 import fr.billetterie.model.Client;
 import fr.billetterie.model.Seat;

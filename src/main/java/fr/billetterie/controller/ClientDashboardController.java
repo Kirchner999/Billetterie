@@ -1,6 +1,7 @@
 package fr.billetterie.controller;
 
 import fr.billetterie.App;
+import fr.billetterie.dao.ClientDAO;
 import fr.billetterie.model.Client;
 import fr.billetterie.model.Purchase;
 import fr.billetterie.model.Seat;
@@ -26,6 +27,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -300,6 +302,58 @@ public class ClientDashboardController {
         contentPane.getChildren().setAll(page);
     }
 
+    @FXML
+    public void showUserSettings() {
+        currentSection = "settings";
+        Client user = App.getCurrentUser();
+        if (user == null) {
+            contentPane.getChildren().setAll(buildEmptyState("Aucun utilisateur connecte."));
+            return;
+        }
+
+        VBox page = createPageBox();
+        page.getChildren().add(buildSectionTitle(
+                "Parametres utilisateur",
+                "Modifie tes informations personnelles sans quitter l'application."
+        ));
+
+        VBox formCard = new VBox(14);
+        formCard.getStyleClass().addAll("card", "settings-card");
+
+        TextField pseudoField = new TextField(user.getPseudo());
+        TextField nomField = new TextField(user.getNom());
+        TextField prenomField = new TextField(user.getPrenom() != null ? user.getPrenom() : "");
+        TextField numeroField = new TextField(user.getNumero() != null ? user.getNumero() : "");
+        TextField emailField = new TextField(user.getEmail());
+        TextField adresseField = new TextField(user.getAdresse() != null ? user.getAdresse() : "");
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Laisser vide pour conserver le mot de passe actuel");
+
+        formCard.getChildren().addAll(
+                buildSettingsField("Pseudo", pseudoField),
+                buildSettingsField("Nom", nomField),
+                buildSettingsField("Prenom", prenomField),
+                buildSettingsField("Numero", numeroField),
+                buildSettingsField("E-mail", emailField),
+                buildSettingsField("Adresse", adresseField),
+                buildSettingsField("Nouveau mot de passe", passwordField)
+        );
+
+        Button saveButton = new Button("Enregistrer les modifications");
+        saveButton.setOnAction(event -> saveUserSettings(
+                pseudoField.getText(),
+                nomField.getText(),
+                prenomField.getText(),
+                numeroField.getText(),
+                emailField.getText(),
+                adresseField.getText(),
+                passwordField.getText()
+        ));
+
+        page.getChildren().addAll(formCard, saveButton);
+        contentPane.getChildren().setAll(page);
+    }
+
     private void showClientHome() {
         currentSection = "home";
         Client user = App.getCurrentUser();
@@ -334,8 +388,77 @@ public class ClientDashboardController {
             case "spectacles" -> renderSpectaclesPage(currentSearchText, currentFilterMode, currentSortMode);
             case "mes-achats" -> showMesBillets();
             case "mes-billets-pdf" -> showMesBilletsPdf();
+            case "settings" -> showUserSettings();
             default -> showClientHome();
         }
+    }
+
+    private VBox buildSettingsField(String labelText, TextField field) {
+        VBox box = new VBox(6);
+        Label label = new Label(labelText);
+        label.getStyleClass().add("stat-title");
+        box.getChildren().addAll(label, field);
+        return box;
+    }
+
+    private void saveUserSettings(String pseudo, String nom, String prenom, String numero, String email, String adresse, String newPassword) {
+        Client currentUser = App.getCurrentUser();
+        if (currentUser == null) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Aucun utilisateur connecte."));
+            return;
+        }
+
+        String normalizedPseudo = normalizeValue(pseudo);
+        String normalizedNom = normalizeValue(nom);
+        String normalizedPrenom = normalizeValue(prenom);
+        String normalizedNumero = normalizeValue(numero);
+        String normalizedEmail = normalizeValue(email);
+        String normalizedAdresse = normalizeValue(adresse);
+        String normalizedPassword = normalizeValue(newPassword);
+
+        if (normalizedPseudo.isBlank() || normalizedNom.isBlank() || normalizedEmail.isBlank()) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Pseudo, nom et e-mail sont obligatoires."));
+            return;
+        }
+        if (!normalizedEmail.contains("@")) {
+            showPurchaseFailure(PurchaseOperationResult.failure("L'e-mail n'est pas valide."));
+            return;
+        }
+        if (!normalizedPassword.isBlank() && normalizedPassword.length() < 6) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Le mot de passe doit contenir au moins 6 caracteres."));
+            return;
+        }
+
+        Client updatedUser = new Client(
+                currentUser.getId(),
+                normalizedPseudo,
+                normalizedNom,
+                normalizedPrenom,
+                normalizedNumero.isBlank() ? null : normalizedNumero,
+                normalizedEmail,
+                normalizedPassword.isBlank() ? currentUser.getPassword() : normalizedPassword,
+                normalizedAdresse.isBlank() ? null : normalizedAdresse,
+                currentUser.getRole(),
+                currentUser.isAdmin(),
+                currentUser.getDateCreation()
+        );
+
+        boolean saved = ClientDAO.updateProfile(updatedUser);
+        if (!saved) {
+            showPurchaseFailure(PurchaseOperationResult.failure("Impossible d'enregistrer les parametres utilisateur."));
+            return;
+        }
+
+        App.setCurrentUser(updatedUser);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, "Parametres utilisateur enregistres.");
+        alert.setTitle("Parametres utilisateur");
+        alert.setHeaderText("Mise a jour effectuee");
+        alert.showAndWait();
+        showUserSettings();
+    }
+
+    private String normalizeValue(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private VBox buildEventsList(List<Ticket> tickets) {

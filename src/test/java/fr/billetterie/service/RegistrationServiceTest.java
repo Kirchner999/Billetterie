@@ -21,7 +21,7 @@ class RegistrationServiceTest {
         RegistrationResult result = service.register("alice", "", "", "secret1");
 
         assertFalse(result.success());
-        assertEquals("Ce nom d'utilisateur est deja utilise !", result.message());
+        assertEquals("Ce nom d'utilisateur est déjà utilisé !", result.message());
     }
 
     @Test
@@ -31,7 +31,7 @@ class RegistrationServiceTest {
         RegistrationResult result = service.register("alice", "", "", "123");
 
         assertFalse(result.success());
-        assertEquals("Le mot de passe doit contenir au moins 6 caracteres.", result.message());
+        assertEquals("Le mot de passe doit contenir au moins 6 caractères.", result.message());
     }
 
     @Test

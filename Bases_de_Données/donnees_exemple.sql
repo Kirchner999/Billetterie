@@ -55,6 +55,16 @@ INSERT INTO seats (ticket_id, seat_row, seat_number, is_taken) VALUES
 (3, 'C', 1, 1), (3, 'C', 2, 1), (3, 'C', 3, 0), (3, 'C', 4, 0), (3, 'C', 5, 0), (3, 'C', 6, 0),
 (4, 'D', 1, 1), (4, 'D', 2, 1), (4, 'D', 3, 0), (4, 'D', 4, 0), (4, 'D', 5, 0), (4, 'D', 6, 0);
 
+UPDATE representation r
+JOIN (
+    SELECT
+        ticket_id,
+        COALESCE(SUM(CASE WHEN is_taken = 0 THEN 1 ELSE 0 END), 0) AS free_seats
+    FROM seats
+    GROUP BY ticket_id
+) seat_stats ON seat_stats.ticket_id = r.id
+SET r.stock = seat_stats.free_seats;
+
 SELECT b.numero, s.titre, r.date_heure, r.salle
 FROM billet b
 JOIN representation r ON b.id_representation = r.id

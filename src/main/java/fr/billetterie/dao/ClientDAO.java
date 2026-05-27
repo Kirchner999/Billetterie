@@ -2,10 +2,13 @@ package fr.billetterie.dao;
 
 import fr.billetterie.model.Client;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,7 +48,7 @@ public class ClientDAO {
             pst.setString(3, valueOrEmpty(client.getPrenom()));
             pst.setString(4, nullable(client.getNumero()));
             pst.setString(5, client.getEmail());
-            pst.setString(6, client.getPassword());
+            pst.setString(6, hashPassword(client.getPassword()));
             pst.setString(7, nullable(client.getAdresse()));
             pst.setString(8, normalizeRole(client.getRole()));
             pst.setBoolean(9, client.isAdmin());
@@ -62,7 +65,7 @@ public class ClientDAO {
         String sql = """
             SELECT *
             FROM client
-            WHERE (pseudo = ? OR email = ?) AND password = ?
+            WHERE pseudo = ? OR email = ?
             LIMIT 1
         """;
 
@@ -71,10 +74,11 @@ public class ClientDAO {
 
             pst.setString(1, usernameOrEmail);
             pst.setString(2, usernameOrEmail);
-            pst.setString(3, password);
             ResultSet rs = pst.executeQuery();
-            if (rs.next()) {
-                return map(rs);
+            while (rs.next()) {
+                if (passwordMatches(password, rs.getString("password"))) {
+                    return map(rs);
+                }
             }
         } catch (Exception e) {
             System.out.println("Erreur authenticate()");
@@ -117,6 +121,32 @@ public class ClientDAO {
         return list;
     }
 
+    public static boolean updateProfile(Client client) {
+        String sql = """
+            UPDATE client
+            SET pseudo = ?, nom = ?, prenom = ?, numero = ?, email = ?, password = ?, adresse = ?
+            WHERE id = ?
+        """;
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+
+            pst.setString(1, valueOrEmpty(client.getPseudo()));
+            pst.setString(2, valueOrEmpty(client.getNom()));
+            pst.setString(3, valueOrEmpty(client.getPrenom()));
+            pst.setString(4, nullable(client.getNumero()));
+            pst.setString(5, valueOrEmpty(client.getEmail()));
+            pst.setString(6, hashPassword(client.getPassword()));
+            pst.setString(7, nullable(client.getAdresse()));
+            pst.setInt(8, client.getId());
+            return pst.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Erreur updateProfile()");
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     private static String normalizeRole(String role) {
         if (role == null || role.isBlank()) {
             return "CLIENT";
@@ -139,5 +169,29 @@ public class ClientDAO {
             return null;
         }
         return value.trim();
+    }
+
+    private static String hashPassword(String password) {
+        String normalizedPassword = valueOrEmpty(password);
+        if (normalizedPassword.startsWith("sha256:")) {
+            return normalizedPassword;
+        }
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(normalizedPassword.getBytes(StandardCharsets.UTF_8));
+            return "sha256:" + HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            throw new IllegalStateException("Hash du mot de passe impossible", e);
+        }
+    }
+
+    private static boolean passwordMatches(String candidatePassword, String storedPassword) {
+        String normalizedCandidate = valueOrEmpty(candidatePassword);
+        String normalizedStored = valueOrEmpty(storedPassword);
+        if (normalizedStored.startsWith("sha256:")) {
+            return hashPassword(normalizedCandidate).equals(normalizedStored);
+        }
+        return normalizedCandidate.equals(normalizedStored);
     }
 }

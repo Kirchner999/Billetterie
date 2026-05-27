@@ -38,9 +38,29 @@ public class TicketCatalogDAO {
     public static List<Ticket> getAvailableTickets() {
         List<Ticket> tickets = new ArrayList<>();
         String sql = """
-                SELECT id, event_name, event_date, price, stock
-                FROM tickets
-                WHERE event_date >= NOW() AND stock > 0
+                SELECT
+                    t.id,
+                    t.event_name,
+                    t.event_date,
+                    t.price,
+                    CASE
+                        WHEN COALESCE(seat_stats.total_seats, 0) > 0 THEN seat_stats.available_seats
+                        ELSE t.stock
+                    END AS stock
+                FROM tickets t
+                LEFT JOIN (
+                    SELECT
+                        ticket_id,
+                        COUNT(*) AS total_seats,
+                        COALESCE(SUM(CASE WHEN is_taken = 0 THEN 1 ELSE 0 END), 0) AS available_seats
+                    FROM seats
+                    GROUP BY ticket_id
+                ) seat_stats ON seat_stats.ticket_id = t.id
+                WHERE t.event_date >= NOW()
+                  AND CASE
+                        WHEN COALESCE(seat_stats.total_seats, 0) > 0 THEN seat_stats.available_seats
+                        ELSE t.stock
+                      END > 0
                 ORDER BY event_date ASC
                 """;
 
@@ -61,7 +81,27 @@ public class TicketCatalogDAO {
 
     public static List<Ticket> getAllTickets() {
         List<Ticket> tickets = new ArrayList<>();
-        String sql = "SELECT id, event_name, event_date, price, stock FROM tickets ORDER BY event_date ASC";
+        String sql = """
+                SELECT
+                    t.id,
+                    t.event_name,
+                    t.event_date,
+                    t.price,
+                    CASE
+                        WHEN COALESCE(seat_stats.total_seats, 0) > 0 THEN seat_stats.available_seats
+                        ELSE t.stock
+                    END AS stock
+                FROM tickets t
+                LEFT JOIN (
+                    SELECT
+                        ticket_id,
+                        COUNT(*) AS total_seats,
+                        COALESCE(SUM(CASE WHEN is_taken = 0 THEN 1 ELSE 0 END), 0) AS available_seats
+                    FROM seats
+                    GROUP BY ticket_id
+                ) seat_stats ON seat_stats.ticket_id = t.id
+                ORDER BY t.event_date ASC
+                """;
 
         try (Connection conn = Database.getConnection();
              PreparedStatement pst = conn.prepareStatement(sql);
@@ -79,7 +119,27 @@ public class TicketCatalogDAO {
     }
 
     public static Optional<Ticket> findTicketById(int ticketId) {
-        String sql = "SELECT id, event_name, event_date, price, stock FROM tickets WHERE id = ?";
+        String sql = """
+                SELECT
+                    t.id,
+                    t.event_name,
+                    t.event_date,
+                    t.price,
+                    CASE
+                        WHEN COALESCE(seat_stats.total_seats, 0) > 0 THEN seat_stats.available_seats
+                        ELSE t.stock
+                    END AS stock
+                FROM tickets t
+                LEFT JOIN (
+                    SELECT
+                        ticket_id,
+                        COUNT(*) AS total_seats,
+                        COALESCE(SUM(CASE WHEN is_taken = 0 THEN 1 ELSE 0 END), 0) AS available_seats
+                    FROM seats
+                    GROUP BY ticket_id
+                ) seat_stats ON seat_stats.ticket_id = t.id
+                WHERE t.id = ?
+                """;
         try (Connection conn = Database.getConnection();
              PreparedStatement pst = conn.prepareStatement(sql)) {
             pst.setInt(1, ticketId);
