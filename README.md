@@ -20,8 +20,10 @@ Par defaut, l'application JavaFX cible la base MySQL `dispelltacle`.
 Le schema principal est fourni dans :
 
 ```text
-Bases_de_Données/bdd.sql
+Bases_de_Donnees/bdd.sql
 ```
+
+Sur Windows, le dossier du projet est nomme `Bases_de_Donnees` dans cette documentation, mais il peut apparaitre avec l'accent `Bases_de_Données` dans l'explorateur.
 
 La connexion MySQL peut etre surchargee avec ces variables d'environnement :
 
@@ -44,7 +46,7 @@ mot de passe vide
 Un jeu de donnees de demonstration est disponible dans :
 
 ```text
-Bases_de_Données/donnees_exemple.sql
+Bases_de_Donnees/donnees_exemple.sql
 ```
 
 Import possible avec XAMPP :
@@ -52,6 +54,32 @@ Import possible avec XAMPP :
 ```powershell
 C:\xampp\mysql\bin\mysql.exe -u root < Bases_de_Données\bdd.sql
 C:\xampp\mysql\bin\mysql.exe -u root dispelltacle < Bases_de_Données\donnees_exemple.sql
+```
+
+## Jar executable
+
+Generation du jar avec dependances :
+
+```powershell
+mvn clean package
+```
+
+Le jar autonome est genere ici :
+
+```text
+target\billetterie-main-1.0-SNAPSHOT-all.jar
+```
+
+Lancement en ligne de commande :
+
+```powershell
+java -jar target\billetterie-main-1.0-SNAPSHOT-all.jar
+```
+
+Sous Windows, un script de lancement est aussi fourni :
+
+```text
+run-billetterie.bat
 ```
 
 ## Tests
